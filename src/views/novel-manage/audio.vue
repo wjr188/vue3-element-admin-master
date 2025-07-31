@@ -75,11 +75,14 @@
           <el-button type="info" @click="onBatchSetVisibility" size="small" :disabled="selectedRows.length === 0">批量设置可见性</el-button>
         </el-form-item>
         <el-form-item>
-          <el-button type="warning" @click="onBatchSetVipFree" size="small" :disabled="selectedRows.length === 0">批量设置VIP免费</el-button>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="warning" @click="onBatchSetCoinPerChapter" size="small" :disabled="selectedRows.length === 0">批量设置每集金币</el-button>
-        </el-form-item>
+  <el-button type="warning" @click="onBatchSetVip" size="small" :disabled="selectedRows.length === 0">批量设置VIP专享</el-button>
+</el-form-item>
+<el-form-item>
+  <el-button type="info" @click="onBatchCancelVip" size="small" :disabled="selectedRows.length === 0">批量取消VIP</el-button>
+</el-form-item>
+<el-form-item>
+  <el-button type="warning" @click="onBatchSetCoin" size="small" :disabled="selectedRows.length === 0">批量设置金币</el-button>
+</el-form-item>
         <el-form-item>
           <el-button type="success" @click="onBatchSetNarrator" size="small" :disabled="selectedRows.length === 0">批量设置演播人</el-button>
         </el-form-item>
@@ -141,17 +144,18 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="is_vip_free" label="VIP免费" width="80" align="center">
-          <template #default="scope">
-            <el-tag v-if="scope.row.is_vip_free" type="success" size="small">是</el-tag>
-            <el-tag v-else type="info" size="small">否</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="coin_per_chapter" label="每集金币" width="80" align="center">
-          <template #default="scope">
-            <el-tag v-if="scope.row.coin_per_chapter && scope.row.coin_per_chapter > 0" type="warning" size="small">{{ scope.row.coin_per_chapter }}</el-tag>
-          </template>
-        </el-table-column>
+        <el-table-column prop="is_vip" label="VIP专享" width="80" align="center">
+  <template #default="scope">
+    <el-tag v-if="scope.row.is_vip" type="success" size="small">是</el-tag>
+    <el-tag v-else type="info" size="small">否</el-tag>
+  </template>
+</el-table-column>
+<el-table-column prop="coin" label="金币" width="80" align="center">
+  <template #default="scope">
+    <el-tag v-if="scope.row.coin && scope.row.coin > 0" type="warning" size="small">{{ scope.row.coin }}</el-tag>
+    <el-tag v-else type="info" size="small">0</el-tag>
+  </template>
+</el-table-column>
         <el-table-column prop="publish_time" label="发布时间" min-width="100" align="center" />
         <el-table-column label="操作" fixed="right" width="200" align="center">
           <template #default="scope">
@@ -200,7 +204,7 @@
         </el-form-item>
         <el-form-item label="封面图">
           <el-upload
-            action="YOUR_UPLOAD_API_URL" <!-- 请替换为你的实际图片上传 API URL -->
+            action="YOUR_UPLOAD_API_URL" 
             list-type="picture-card"
             :file-list="dialogForm.cover_file_list"
             :limit="1"
@@ -229,12 +233,12 @@
         <el-form-item label="可见性">
           <el-switch v-model="dialogForm.visibility" active-text="可见" inactive-text="隐藏" :active-value="1" :inactive-value="0" />
         </el-form-item>
-        <el-form-item label="VIP免费">
-          <el-switch v-model="dialogForm.is_vip_free" active-text="是" inactive-text="否" :active-value="1" :inactive-value="0" />
-        </el-form-item>
-        <el-form-item label="每集金币">
-          <el-input-number v-model="dialogForm.coin_per_chapter" :min="0" style="width: 120px" />
-        </el-form-item>
+        <<el-form-item label="VIP专享">
+  <el-switch v-model="dialogForm.is_vip" active-text="是" inactive-text="否" :active-value="1" :inactive-value="0" />
+</el-form-item>
+<el-form-item label="金币">
+  <el-input-number v-model="dialogForm.coin" :min="0" style="width: 120px" />
+</el-form-item>
         <el-form-item>
           <el-button type="primary" @click="submitDialog" :loading="dialogLoading">{{ dialogType==='add'?'确定':'保存' }}</el-button>
           <el-button @click="dialogVisible=false">取消</el-button>
@@ -596,62 +600,53 @@ async function onBatchSetVisibility() {
     }
   });
 }
-
-/**
- * 批量设置VIP免费
- */
-async function onBatchSetVipFree() {
+// 批量设置VIP
+async function onBatchSetVip() {
   if (selectedRows.value.length === 0) {
     return ElMessage.warning('请先勾选有声小说');
   }
-  ElMessageBox.confirm('请选择是否设置VIP免费', '批量设置VIP免费', {
-    confirmButtonText: '设置为VIP免费',
-    cancelButtonText: '取消VIP免费',
-    distinguishCancelAndClose: true,
-    type: 'warning'
-  }).then(async () => { // 用户选择 "设置为VIP免费"
-    const ids = selectedRows.value.map(row => row.id);
-    const res = await audioNovelStore.batchSetVipFree(ids, 1);
-    if (res && res.code === 0) {
-      ElMessage.success('批量设置VIP免费成功');
-      selectedRows.value = [];
-      fetchTableData();
-    } else {
-      ElMessage.error(res?.msg || '批量设置失败');
-    }
-  }).catch(async (action) => {
-    if (action === 'cancel') { // 用户选择 "取消VIP免费"
-      await ElMessageBox.confirm('确定批量取消已选有声小说的VIP免费状态吗？', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }).then(async () => {
-        const ids = selectedRows.value.map(row => row.id);
-        const res = await audioNovelStore.batchSetVipFree(ids, 0);
-        if (res && res.code === 0) {
-          ElMessage.success('批量取消VIP免费成功');
-          selectedRows.value = [];
-          fetchTableData();
-        } else {
-          ElMessage.error(res?.msg || '批量设置失败');
-        }
-      }).catch(() => {
-        ElMessage.info('已取消设置');
-      });
-    } else {
-      ElMessage.info('已取消设置');
-    }
-  });
+  await ElMessageBox.confirm('确定要批量将选中有声小说设置为VIP专享吗？', '批量设置VIP', { type: 'warning' })
+    .then(async () => {
+      const ids = selectedRows.value.map(row => row.id);
+      const res = await audioNovelStore.batchSetVip(ids, 1); // 1=VIP
+      if (res && res.code === 0) {
+        ElMessage.success('批量设置VIP成功');
+        selectedRows.value = [];
+        fetchTableData();
+      } else {
+        ElMessage.error(res?.msg || '批量设置失败');
+      }
+    }).catch(() => {
+      ElMessage.info('已取消设置VIP');
+    });
+}
+// 批量取消VIP
+async function onBatchCancelVip() {
+  if (selectedRows.value.length === 0) {
+    return ElMessage.warning('请先勾选有声小说');
+  }
+  await ElMessageBox.confirm('确定要批量取消选中有声小说的VIP专享吗？', '批量取消VIP', { type: 'warning' })
+    .then(async () => {
+      const ids = selectedRows.value.map(row => row.id);
+      const res = await audioNovelStore.batchCancelVip(ids);
+      if (res && res.code === 0) {
+        ElMessage.success('批量取消VIP成功');
+        selectedRows.value = [];
+        fetchTableData();
+      } else {
+        ElMessage.error(res?.msg || '批量设置失败');
+      }
+    }).catch(() => {
+      ElMessage.info('已取消取消VIP');
+    });
 }
 
-/**
- * 批量设置每集金币
- */
-async function onBatchSetCoinPerChapter() {
+// 批量设置金币
+async function onBatchSetCoin() {
   if (selectedRows.value.length === 0) {
     return ElMessage.warning('请先勾选有声小说');
   }
-  ElMessageBox.prompt('请输入要设置的每集金币数量', '批量设置每集金币', {
+  ElMessageBox.prompt('请输入要设置的金币数量', '批量设置金币', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     inputPattern: /^\d+$/,
@@ -662,19 +657,18 @@ async function onBatchSetCoinPerChapter() {
       return ElMessage.error('金币数量无效');
     }
     const ids = selectedRows.value.map(row => row.id);
-    const res = await audioNovelStore.batchSetCoinPerChapter(ids, coin);
+    const res = await audioNovelStore.batchSetCoin(ids, coin);
     if (res && res.code === 0) {
-      ElMessage.success('批量设置每集金币成功');
+      ElMessage.success('批量设置金币成功');
       selectedRows.value = [];
       fetchTableData();
     } else {
-      ElMessage.error(res?.msg || '批量设置每集金币失败');
+      ElMessage.error(res?.msg || '批量设置金币失败');
     }
   }).catch(() => {
     ElMessage.info('已取消设置金币');
   });
 }
-
 /**
  * 批量设置演播人
  */
@@ -758,7 +752,6 @@ async function submitDialog() {
       ...dialogForm.value,
       cover_url: dialogForm.value.cover_file_list.length > 0 ? dialogForm.value.cover_file_list[0].url : '',
     };
-    // 清理前端特有字段
     delete submitData.cover_file_list;
 
     let res;
@@ -766,12 +759,18 @@ async function submitDialog() {
       res = await audioNovelStore.add(submitData);
     } else {
       res = await audioNovelStore.update(submitData);
+      // === 👇 保存后自动同步章节VIP和金币 ===
+      const novelId = submitData.id;
+      // 同步VIP
+      await audioNovelStore.batchSetVip([novelId], submitData.is_vip);
+      // 同步金币
+      await audioNovelStore.batchSetCoin([novelId], submitData.coin);
     }
 
     if (res && res.code === 0) {
       ElMessage.success(dialogType.value === 'add' ? '添加成功' : '保存成功');
       dialogVisible.value = false;
-      fetchTableData(); // 刷新列表
+      fetchTableData();
     } else {
       ElMessage.error(res?.msg || '操作失败');
     }

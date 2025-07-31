@@ -27,7 +27,13 @@
         </el-table-column>
         <el-table-column label="视频数" width="80">
           <template #default="{ row }">
-            {{ store.groupVideoCounts[row.id] || 0 }}
+            {{ row.videos ? row.videos.length : 0 }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="icon" label="图标" width="120">
+          <template #default="{ row }">
+            <span v-if="row.icon">{{ row.icon }}</span>
+            <span v-else>--</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="250">
@@ -55,6 +61,9 @@
         </el-form-item>
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="groupForm.sort" :min="1" controls-position="right"></el-input-number>
+        </el-form-item>
+        <el-form-item label="图标" prop="icon">
+          <el-input v-model="groupForm.icon" placeholder="如 star.svg"></el-input>
         </el-form-item>
         </el-form>
       <template #footer>
@@ -179,7 +188,7 @@ const store = useRecommendCategoryStore();
 const groupFilterForm = ref({ keyword: '' });
 const groupFormDialogVisible = ref(false);
 const isEditGroup = ref(false);
-const groupForm = ref({ id: null as number | null, name: '', sort: 1 });
+const groupForm = ref({ id: null as number | null, name: '', icon: '', sort: 1 });
 const groupFormRef = ref<InstanceType<typeof ElForm>>();
 const groupRules = {
   name: [{ required: true, message: '请输入分组名称', trigger: 'blur' }],
@@ -197,15 +206,9 @@ const filteredChildCategoriesForSelect = computed(() => {
   return store.getChildrenByParentId(videoFilterForm.value.parentId);
 });
 
-// 统计每个分组下视频数量
-async function updateGroupVideoCounts() {
-  await Promise.all(store.recommendGroups.map(g => store.fetchVideosForGroup(g.id)));
-}
-
 // onMounted 时拉取分组和分类数据
 onMounted(async () => {
   await store.fetchRecommendGroups();
-  await updateGroupVideoCounts();
   store.fetchAllParentCategories();
   store.fetchAllChildCategories();
 });
@@ -225,7 +228,7 @@ function openAddGroupDialog() {
   const maxSort = store.recommendGroups && store.recommendGroups.length > 0
     ? Math.max(...store.recommendGroups.map(g => g.sort || 0))
     : 0;
-  groupForm.value = { id: null, name: '', sort: maxSort + 1 };
+  groupForm.value = { id: null, name: '', icon: '', sort: maxSort + 1 }; // 补上 icon
   groupFormDialogVisible.value = true;
   nextTick(() => {
     groupFormRef.value?.clearValidate();
@@ -233,7 +236,7 @@ function openAddGroupDialog() {
 }
 function openEditGroupDialog(row: any) {
   isEditGroup.value = true;
-  groupForm.value = { id: row.id, name: row.name, sort: row.sort };
+  groupForm.value = { id: row.id, name: row.name, icon: row.icon || '', sort: row.sort };
   groupFormDialogVisible.value = true;
   nextTick(() => {
     groupFormRef.value?.clearValidate();
@@ -248,12 +251,14 @@ async function submitGroupForm() {
         groupForm.value.id!,
         {
           name: groupForm.value.name,
+          icon: groupForm.value.icon, // 新增
           sort: groupForm.value.sort
         }
       );
     } else {
       response = await store.addRecommendGroup({
         name: groupForm.value.name,
+        icon: groupForm.value.icon, // 新增
         sort: groupForm.value.sort
       });
     }
@@ -331,9 +336,8 @@ async function saveGroupSort() {
     groupSortChanged.value = false;
   }
 }
-watch(() => store.recommendGroups, () => {
-  updateGroupVideoCounts();
-});
+
+
 
 // 视频管理相关
 const videoDialogVisible = ref(false);
@@ -372,8 +376,7 @@ async function openVideoManageDialog(row: any) {
   allVideoList.value = [];
   selectedVideoList.value = [];
   try {
-    // 关键：先刷新所有分组下的视频
-    await Promise.all(store.recommendGroups.map(g => store.fetchVideosForGroup(g.id)));
+    // 只请求当前分组下的视频
     const existingVideos = await store.fetchVideosForGroup(row.id);
     selectedVideoList.value = existingVideos.map((video: any) => ({
       recommend_id: video.recommend_id,
@@ -414,27 +417,40 @@ async function searchVideos(resetPage = false) {
   if (resetPage) videoPagination.value.currentPage = 1;
   videoLoading.value = true;
   try {
-    // 1. 拉取所有分组下已用的视频ID（除了当前分组）
+    // 统计所有分组已选视频ID（包括当前分组）
     const allGroups = store.recommendGroups;
     const usedVideoIds = new Set<number>();
     for (const group of allGroups) {
-      if (group.id == currentRecommendGroupId.value) continue;
-      const videos = await store.fetchVideosForGroup(group.id);
-      videos.forEach((v: any) => usedVideoIds.add(Number(v.video_id)));
+      if (Array.isArray(group.videos)) {
+        group.videos.forEach((v: any) => usedVideoIds.add(Number(v.video_id)));
+      }
     }
 
-    // 2. 拉取所有可选视频（分页接口，返回当前页数据和总数）
+    // 拉取所有未被选中的视频（分页接口，返回当前页数据和总数），传 excludeIds
     const res = await store.fetchAllVideos({
       keyword: videoFilterForm.value.keyword,
       parentId: videoFilterForm.value.parentId,
       categoryId: videoFilterForm.value.categoryId,
       currentPage: videoPagination.value.currentPage,
       pageSize: videoPagination.value.pageSize,
+      excludeIds: Array.from(usedVideoIds), // 关键参数
     });
 
-    // 3. 当前页数据过滤掉已被其他分组选中的
-    allVideoList.value = res.list.filter((v: any) => !usedVideoIds.has(Number(v.id)));
-    videoPagination.value.total = res.total; // 用接口返回的总数
+    // 当前页数据直接用接口返回，无需再过滤
+    allVideoList.value = res.list;
+    videoPagination.value.total = res.total;
+
+    // 如果当前页没数据且不是第一页且总数>0，自动跳到第一页
+    if (
+      res.list.length === 0 &&
+      videoPagination.value.currentPage !== 1 &&
+      videoPagination.value.total > 0
+    ) {
+      videoPagination.value.currentPage = 1;
+      await searchVideos();
+      return;
+    }
+
     if (allVideoTableRef.value) {
       allVideoTableRef.value.clearSelection();
     }
@@ -447,20 +463,20 @@ async function searchVideos(resetPage = false) {
 }
 function handleVideoCurrentChange(page: number) {
   videoPagination.value.currentPage = page;
-  searchVideos();
+  searchVideos(); // 不传 true
 }
 function handleVideoSizeChange(size: number) {
   videoPagination.value.pageSize = size;
   videoPagination.value.currentPage = 1;
-  searchVideos();
+  searchVideos(); // 不传 true
 }
 function resetVideoFilters() {
   videoFilterForm.value = { keyword: '', parentId: '', categoryId: '' };
-  searchVideos(true);
+  searchVideos(true); // 这里才传 true
 }
 function onVideoParentCategoryChange() {
   videoFilterForm.value.categoryId = '';
-  searchVideos(true);
+  searchVideos(true); // 这里才传 true
 }
 function handleAllVideoSelectionChange(selection: any[]) {
   selectedAllVideos.value = selection;
@@ -529,12 +545,11 @@ async function saveVideoRecommendations() {
     sort: video.sort,
   }));
   try {
-    const success = await store.saveVideosForGroup(currentRecommendGroupId.value, payload);
-    if (success) {
-      ElMessage.success('视频推荐保存成功！');
-      // 保存后刷新所有分组下视频
-      await Promise.all(store.recommendGroups.map(g => store.fetchVideosForGroup(g.id)));
-      await searchVideos();
+    const response = await store.saveVideosForGroup(currentRecommendGroupId.value, payload);
+    if (response && response.code === 200) {
+      // 只弹一次
+      ElMessage.success(response.msg || '视频推荐保存成功！');
+      await store.fetchRecommendGroups();
       closeVideoManageDialog();
     }
   } catch (error) {
@@ -649,6 +664,11 @@ h3 {
 .video-filter-container .el-form-item {
   margin-bottom: 0;
 }
+.video-filter-container .el-select,
+.video-filter-container .el-input {
+  width: 200px; /* 或更大，比如240px，根据实际内容调整 */
+  min-width: 160px;
+}
 
 
 .video-table-footer {
@@ -663,8 +683,10 @@ h3 {
   border: 1px dashed #dcdfe6;
   border-radius: 4px;
   padding: 10px;
-  overflow-y: auto;
-  min-height: 350px;
+  min-height: 550px;
+  max-height: 350px; /* 固定最大高度 */
+  overflow-y: auto;   /* 超出时滚动 */
+  background: #fff;
 }
 
 .selected-video-item {
@@ -692,6 +714,7 @@ h3 {
 
 .selected-video-item span {
   flex-grow: 1;
+  max-width: 220px; /* 限制最大宽度，可根据实际调整 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -16,9 +16,20 @@
 
       <h3>推荐分组列表 (可拖拽排序)</h3>
       <el-table :data="store.recommendGroups || []" v-loading="store.loading" row-key="id" class="recommend-group-table">
-        <el-table-column prop="id" label="编号" width="80"></el-table-column>
-        <el-table-column prop="name" label="分组名"></el-table-column>
-        <el-table-column label="状态" width="80">
+  <el-table-column prop="id" label="编号" width="80"></el-table-column>
+  <el-table-column prop="name" label="分组名"></el-table-column>
+  <!-- 新增布局类型和图标 -->
+  <el-table-column prop="layout_type" label="布局类型" width="100">
+    <template #default="scope">
+      {{ layoutTypeText(scope.row.layout_type) }}
+    </template>
+  </el-table-column>
+  <el-table-column prop="icon" label="图标" width="60">
+    <template #default="scope">
+      <img v-if="scope.row.icon" :src="`/icons/${scope.row.icon}`" style="width:24px;height:24px;" />
+    </template>
+  </el-table-column>
+  <el-table-column label="状态" width="80">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'danger'">
               {{ row.status === 1 ? '启用' : '禁用' }}
@@ -77,6 +88,24 @@
             inactive-text="禁用"
           />
         </el-form-item>
+          <el-form-item label="布局类型" prop="layout_type">
+    <el-select v-model="groupForm.layout_type" placeholder="请选择布局类型" style="width: 100%">
+      <el-option label="横滑卡片" value="type1" />
+      <el-option label="三宫格" value="type2" />
+      <el-option label="两宫格" value="type3" />
+      <el-option label="九宫格" value="type4" />
+      <el-option label="列表" value="list" />
+      <el-option label="不限制" value="type5" />
+      <el-option label="横图视频卡" value="videocard" />
+    </el-select>
+  </el-form-item>
+  <el-form-item label="图标文件" prop="icon">
+    <el-input v-model="groupForm.icon" placeholder="如 hot1.svg，留空不显示" style="width: 180px;">
+      <template #append>
+        <img v-if="groupForm.icon" :src="`/icons/${groupForm.icon}`" style="width: 24px; height: 24px; margin-left: 4px;" alt="icon预览" @error="e => (e.target.style.display='none')" />
+      </template>
+    </el-input>
+  </el-form-item>
         <input type="hidden" v-model="groupForm.type" value="audio" />
       </el-form>
       <template #footer>
@@ -186,17 +215,22 @@ const groupFilterForm = ref({ keyword: '' });
 const groupFormDialogVisible = ref(false);
 const isEditGroup = ref(false);
 const groupForm = ref({
-  id: null as number | null,
+  id: null,
   name: '',
   sort: 1,
   status: 1,
-  type: 'audio' // 固定为有声类型
+  type: 'audio',
+  layout_type: 'type1', // 新增
+  icon: '',             // 新增
 });
 const groupFormRef = ref<InstanceType<typeof ElForm>>();
 const groupRules = {
   name: [{ required: true, message: '请输入分组名称', trigger: 'blur' }],
-  sort: [{ required: true, message: '请输入排序值', trigger: 'blur' }]
+  sort: [{ required: true, message: '请输入排序值', trigger: 'blur' }],
+  layout_type: [{ required: true, message: '请选择布局类型', trigger: 'change' }],
+  icon: [{ required: false, message: '请输入图标文件名', trigger: 'blur' }]
 };
+
 const groupSortChanged = ref(false);
 
 async function updateGroupAudioNovelCounts() {
@@ -234,6 +268,18 @@ function openAddGroupDialog() {
     groupFormRef.value?.clearValidate();
   });
 }
+function layoutTypeText(type: string) {
+  const map: any = {
+    type1: '横滑卡片',
+    type2: '三宫格',
+    type3: '两宫格',
+    type4: '九宫格',
+    list: '列表',
+    type5: '不限制',
+    videocard: '横图视频卡',
+  }
+  return map[type] || type || '-';
+}
 
 function openEditGroupDialog(row: any) {
   isEditGroup.value = true;
@@ -256,21 +302,25 @@ async function submitGroupForm() {
     let response;
     if (isEditGroup.value) {
       response = await store.updateRecommendGroup(
-        groupForm.value.id!,
-        { 
-          name: groupForm.value.name, 
-          sort: groupForm.value.sort,
-          status: groupForm.value.status,
-          type: groupForm.value.type
-        }
-      );
+  groupForm.value.id!,
+  {
+    name: groupForm.value.name,
+    sort: groupForm.value.sort,
+    status: groupForm.value.status,
+    type: groupForm.value.type,
+    layout_type: groupForm.value.layout_type,
+    icon: groupForm.value.icon,
+  }
+);
     } else {
       response = await store.addRecommendGroup({
-        name: groupForm.value.name,
-        sort: groupForm.value.sort,
-        status: groupForm.value.status,
-        type: groupForm.value.type
-      });
+  name: groupForm.value.name,
+  sort: groupForm.value.sort,
+  status: groupForm.value.status,
+  type: groupForm.value.type,
+  layout_type: groupForm.value.layout_type,
+  icon: groupForm.value.icon,
+});
     }
     if (response && response.code === 0) {
       ElMessage.success(response.msg || (isEditGroup.value ? '分组更新成功！' : '分组添加成功！'));

@@ -34,3 +34,8 @@ export function batchDeleteAudioNovelChaptersAPI(ids: number[]) {
 export function batchUpdateAudioNovelChapterOrderAPI(list: Array<{ id: number, chapter_order: number }>) {
   return request.post('/api/audio_novel_chapter/batchUpdateOrder', { list });
 }
+
+// 批量设为免费章节
+export function setAudioNovelChaptersFreeAPI(ids: number[]) {
+  return request.post('/api/audio_novel_chapter/setFree', { ids });
+}

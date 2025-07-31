@@ -5,6 +5,7 @@
     width="80%"
     top="5vh"
     destroy-on-close
+    append-to-body
     @close="emit('close')"
   >
     <div class="chapter-manage-container">
@@ -13,6 +14,8 @@
         <el-button type="success" @click="openAddChapterDialog"> + 添加章节</el-button>
         <el-button type="danger" @click="onBatchDeleteChapters" :disabled="selectedChapters.length === 0">批量删除</el-button>
         <el-button type="primary" @click="saveChapterSort" :loading="saveSortLoading">保存章节排序</el-button>
+        <el-button type="success" @click="onBatchSetFree" :disabled="selectedChapters.length === 0">批量设为免费</el-button>
+
       </div>
 
       <!-- 章节列表 -->
@@ -39,19 +42,18 @@
             {{ formatDuration(scope.row.duration) }}
           </template>
         </el-table-column>
-        <el-table-column prop="is_paid" label="是否付费" width="80" align="center">
-          <template #default="scope">
-            <el-tag :type="scope.row.is_paid === 1 ? 'warning' : 'success'" size="small">
-              {{ scope.row.is_paid === 1 ? '是' : '否' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="coin_required" label="金币" width="70" align="center">
-          <template #default="scope">
-            <span v-if="scope.row.is_paid === 1">{{ scope.row.coin_required }}</span>
-            <span v-else>--</span>
-          </template>
-        </el-table-column>
+        <el-table-column prop="is_vip" label="VIP章节" width="80" align="center">
+  <template #default="scope">
+    <el-tag :type="scope.row.is_vip === 1 ? 'warning' : 'info'" size="small">
+      {{ scope.row.is_vip === 1 ? '是' : '否' }}
+    </el-tag>
+  </template>
+</el-table-column>
+<el-table-column prop="coin" label="金币" width="70" align="center">
+  <template #default="scope">
+    <span>{{ scope.row.coin || 0 }}</span>
+  </template>
+</el-table-column>
         <el-table-column prop="publish_time" label="发布时间" width="120" align="center" />
         <el-table-column label="操作" fixed="right" width="200" align="center">
           <template #default="scope">
@@ -76,7 +78,14 @@
     </div>
 
     <!-- 添加/编辑章节弹窗 -->
-    <el-dialog v-model="chapterDialogVisible" :title="currentChapterForm.id ? '编辑章节' : '添加章节'" width="580px" append-to-body>
+    <el-dialog
+  v-model="chapterDialogVisible"
+  :title="currentChapterForm.id ? '编辑章节' : '添加章节'"
+  width="580px"
+  append-to-body
+  destroy-on-close
+  @close="closeDialog"
+>
       <el-form :model="currentChapterForm" label-width="90px" size="small">
         <el-form-item label="章节标题" required>
           <el-input v-model="currentChapterForm.title" placeholder="请输入章节标题" clearable />
@@ -84,37 +93,49 @@
         <el-form-item label="章节序号" required>
           <el-input-number v-model="currentChapterForm.chapter_order" :min="1" style="width: 120px;" />
         </el-form-item>
-        <el-form-item label="音频文件" required>
-          <el-upload
-            action="YOUR_AUDIO_UPLOAD_API_URL" <!-- 请替换为你的实际音频文件上传 API URL -->
-            :file-list="currentChapterForm.audio_file_list"
-            :limit="1"
-            :on-remove="handleRemoveAudio"
-            :on-success="handleAudioUploadSuccess"
-            :before-upload="beforeUploadAudio"
-            accept=".mp3,.wav,.m4a"
-          >
-            <el-button type="primary" size="small">点击上传</el-button>
-            <template #tip>
-              <div class="el-upload__tip">支持 mp3/wav/m4a 格式，单文件大小不超过 50MB</div>
-            </template>
-          </el-upload>
-          <div v-if="currentChapterForm.audio_url" style="margin-top: 10px; font-size: 13px; color: #606266;">
-            已上传: <a :href="fullAudioUrlForForm" target="_blank">{{ currentChapterForm.audio_url.substring(currentChapterForm.audio_url.lastIndexOf('/') + 1) || currentChapterForm.audio_url }}</a>
-          </div>
-        </el-form-item>
-        <el-form-item label="音频时长(秒)">
-          <el-input-number v-model="currentChapterForm.duration" :min="0" :step="1" style="width: 120px;" />
-          <el-tooltip content="通常由上传接口自动填充，可手动修改" placement="top">
-            <el-icon><info-filled /></el-icon>
-          </el-tooltip>
-        </el-form-item>
-        <el-form-item label="是否付费">
-          <el-switch v-model="currentChapterForm.is_paid" active-text="是" inactive-text="否" :active-value="1" :inactive-value="0" />
-        </el-form-item>
-        <el-form-item label="所需金币" v-if="currentChapterForm.is_paid === 1">
-          <el-input-number v-model="currentChapterForm.coin_required" :min="0" style="width: 120px;" />
-        </el-form-item>
+       <el-form-item label="音频文件" required>
+  <el-upload
+    action="YOUR_UPLOAD_API"
+    :file-list="currentChapterForm.audio_file_list"
+    :limit="1"
+    :on-remove="handleRemoveAudio"
+    :on-success="handleAudioUploadSuccess"
+    :before-upload="beforeUploadAudio"
+    accept=".mp3,.wav,.m4a"
+    :show-file-list="false"
+  >
+    <el-button type="primary" size="small">点击上传</el-button>
+  </el-upload>
+
+  <!-- 填写/显示音频链接（可上传、可粘贴） -->
+  <el-input
+    v-model="currentChapterForm.audio_url"
+    placeholder="可填写外链，或上传后自动填充"
+    clearable
+    style="margin-top: 8px"
+  />
+
+  <el-button size="small" style="margin:8px 0 0 8px" @click="handleGetAudioUrlDuration">获取时长</el-button>
+
+  <div v-if="currentChapterForm.audio_url" style="margin: 8px 0 0 0;">
+    <span>音频链接：</span>
+    <a :href="currentChapterForm.audio_url" target="_blank">{{ getAudioFileName(currentChapterForm.audio_url) }}</a>
+  </div>
+</el-form-item>
+
+
+<el-form-item label="音频时长(秒)">
+  <el-input-number v-model="currentChapterForm.duration" :min="0" :step="1" style="width:120px" :readonly="durationReadonly" />
+  <el-tooltip content="通常上传后自动填充或点按钮获取，可手动修改" placement="top">
+    <el-icon><info-filled /></el-icon>
+  </el-tooltip>
+</el-form-item>
+        <el-form-item label="VIP专享">
+  <el-switch v-model="currentChapterForm.is_vip" active-text="是" inactive-text="否" :active-value="1" :inactive-value="0" />
+</el-form-item>
+<el-form-item label="金币">
+  <el-input-number v-model="currentChapterForm.coin" :min="0" style="width: 120px;" />
+</el-form-item>
         <el-form-item>
           <el-button type="primary" @click="submitChapterForm" :loading="chapterDialogLoading">
             {{ currentChapterForm.id ? '保存' : '确定' }}
@@ -125,7 +146,14 @@
     </el-dialog>
 
     <!-- 章节音频预览弹窗 -->
-    <el-dialog v-model="chapterPreviewVisible" :title="currentPreviewChapter.title + ' - 音频预览'" width="500px" append-to-body>
+     <el-dialog
+      v-model="chapterPreviewVisible"
+      :title="currentPreviewChapter.title + ' - 音频预览'"
+      width="500px"
+      append-to-body
+      destroy-on-close
+      @close="chapterPreviewVisible = false"
+    >
       <div class="audio-preview-section">
         <audio controls :src="fullAudioUrlForPreview" style="width: 100%;"></audio>
         <div v-if="!currentPreviewChapter.audio_url">
@@ -155,6 +183,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits(['close']);
+const durationReadonly = ref(false);
 
 const dialogVisible = ref(true);
 const dialogTitle = computed(() => `《${props.novelTitle}》章节管理`);
@@ -178,8 +207,8 @@ const currentChapterForm = ref<any>({
   audio_url: '',
   audio_file_list: [],
   duration: 0,
-  is_paid: 0,
-  coin_required: 0,
+  is_vip: 0,
+  coin: 0,
 });
 
 // 7. 章节音频预览
@@ -200,7 +229,7 @@ const fullAudioUrlForForm = computed(() => {
 });
 
 // 8. 章节列表/总数/加载状态直接用 store
-const audioNovelChapterList = computed(() => chapterStore.list);
+const audioNovelChapterList = computed(() => Array.isArray(chapterStore.list) ? chapterStore.list : []);
 const audioNovelChapterTotal = computed(() => chapterStore.total);
 const audioNovelChapterLoading = computed(() => chapterStore.loading);
 
@@ -217,15 +246,20 @@ function formatDuration(seconds: number): string {
 }
 
 // 监听 novelId 变化来重新加载章节
-watch(() => props.novelId, (newNovelId) => {
-  if (newNovelId) {
-    fetchChapters();
-  } else {
-    // 如果 novelId 不存在，清空列表
-    audioNovelChapterList.value = [];
-    audioNovelChapterTotal.value = 0;
-  }
-}, { immediate: true }); // 立即执行一次
+watch(
+  () => props.novelId,
+  (newNovelId) => {
+    if (newNovelId) {
+      fetchChapters();
+    } else {
+      // 正确清空方式
+      chapterStore.list = [];
+      chapterStore.total = 0;
+    }
+  },
+  { immediate: true }
+);
+
 
 // ======================= 章节列表操作 =======================
 
@@ -263,8 +297,8 @@ function openAddChapterDialog() {
     audio_url: '',
     audio_file_list: [],
     duration: 0,
-    is_paid: 0,
-    coin_required: 0,
+    is_vip: 0,
+    coin: 0,
   };
   chapterDialogVisible.value = true;
 }
@@ -273,13 +307,11 @@ function openAddChapterDialog() {
  * 打开编辑章节弹窗
  */
 async function openEditChapterDialog(chapter: any) {
-  // 注意：这里我们直接使用传入的 chapter 对象填充表单，
-  // 如果需要从后端获取最新详情，可以调用 fetchAudioNovelChapterDetail
-  // 为了简化，假设传入的 chapter 包含足够的数据
   currentChapterForm.value = {
     ...chapter,
-    // 转换 audio_file_list 为 el-upload 识别的格式
     audio_file_list: chapter.audio_url ? [{ url: (props.audioUrlPrefix || '') + chapter.audio_url, name: chapter.audio_url.substring(chapter.audio_url.lastIndexOf('/') + 1) || chapter.audio_url, uid: Date.now() }] : [],
+    is_vip: chapter.is_vip ?? 0,
+    coin: chapter.coin ?? 0,
   };
   chapterDialogVisible.value = true;
 }
@@ -291,18 +323,17 @@ async function submitChapterForm() {
   if (!currentChapterForm.value.title || !currentChapterForm.value.chapter_order) {
     return ElMessage.error('章节标题和序号为必填项');
   }
-  if (!currentChapterForm.value.audio_url) {
-    return ElMessage.error('请上传音频文件');
-  }
+ if (!currentChapterForm.value.audio_url) {
+  return ElMessage.error('请上传音频文件或填写音频链接');
+}
 
   chapterDialogLoading.value = true;
   try {
     const submitData = {
-      ...currentChapterForm.value,
-      novel_id: props.novelId, // 确保关联正确的novel_id
-    };
-    // 清理前端特有字段
-    delete submitData.audio_file_list;
+  ...currentChapterForm.value,
+  novel_id: props.novelId,
+};
+delete submitData.audio_file_list;
 
     let res;
     if (currentChapterForm.value.id) {
@@ -331,7 +362,7 @@ async function submitChapterForm() {
  */
 async function onDeleteChapter(chapter: any) {
   await ElMessageBox.confirm(`确定删除章节 “${chapter.title}” 吗？`, '警告', { type: 'warning' }).then(async () => {
-    const res = await chapterStore.delete(chapter.id);
+    const res = await chapterStore.remove(chapter.id);
     if (res && res.code === 0) {
       ElMessage.success('章节删除成功');
       fetchChapters();
@@ -410,6 +441,20 @@ async function saveChapterSort() {
     saveSortLoading.value = false;
   }
 }
+async function onBatchSetFree() {
+  if (selectedChapters.value.length === 0) {
+    return ElMessage.warning('请先勾选章节');
+  }
+  const ids = selectedChapters.value.map(c => c.id);
+  const res = await chapterStore.setChaptersFree(ids);
+  if (res && res.code === 0) {
+    ElMessage.success('批量设为免费成功');
+    fetchChapters();
+    selectedChapters.value = [];
+  } else {
+    ElMessage.error(res?.msg || '操作失败');
+  }
+}
 
 // ======================= 音频文件上传 =======================
 
@@ -456,11 +501,34 @@ function closeDialog() {
     audio_url: '',
     audio_file_list: [],
     duration: 0,
-    is_paid: 0,
-    coin_required: 0,
+    is_vip: 0,
+    coin: 0,
   };
   selectedChapters.value = [];
 }
+function getAudioFileName(url: string) {
+  if (!url) return '';
+  return url.substring(url.lastIndexOf('/') + 1) || url;
+}
+function handleGetAudioUrlDuration() {
+  const url = currentChapterForm.value.audio_url;
+  if (!url) {
+    ElMessage.warning('请上传或填写音频链接');
+    return;
+  }
+  const audio = new Audio();
+  audio.src = url;
+  audio.addEventListener('loadedmetadata', () => {
+    currentChapterForm.value.duration = Math.floor(audio.duration);
+    durationReadonly.value = true;
+    ElMessage.success('已获取音频时长');
+  });
+  audio.addEventListener('error', () => {
+    durationReadonly.value = false;
+    ElMessage.error('音频地址无效，无法获取时长');
+  });
+}
+
 </script>
 
 <style scoped>

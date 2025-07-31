@@ -97,14 +97,13 @@ export async function updateVideo(data: any) {
     if (requestData.hasOwnProperty('update_time')) delete requestData.update_time
 
     const res = await service.post('/api/long/videos/update', requestData)
-    if (res) {
-      ElMessage.success('保存成功')
+    // 不要在这里弹 ElMessage
+    if (res && res.code === 0) {
       await fetchVideoList()
-    } else {
-      console.error('updateVideo: 后端返回编辑数据异常:', res)
     }
+    return res
   } catch (error: any) {
-    console.error('updateVideo: Request to update long video failed, please check network or backend service.', error)
+    // 不要在这里弹 ElMessage
     throw error
   }
 }
@@ -269,6 +268,33 @@ export async function batchSetCollect(ids: number[], collectCount: number) {
     return res;
   } catch (error) {
     console.error('batchSetCollect: 请求失败', error)
+    ElMessage.error('网络异常');
+    return null;
+  }
+}
+
+/**
+ * 批量设置点赞数
+ * 官方接口 POST /api/long/videos/batch-set-like
+ */
+export async function batchSetLike(ids: number[], likeCount: number) {
+  try {
+    const res = await service.post('/api/long/videos/batch-set-like', { ids, like_count: likeCount })
+      .catch(err => {
+        return err && err.message ? { code: -1, msg: err.message } : { code: -1, msg: '请求失败' };
+      });
+    
+    console.log('批量设置点赞数返回:', res);
+    
+    if (res && res.code === 0) {
+      ElMessage.success(res.msg || '批量设置点赞数成功');
+      await fetchVideoList();
+    } else {
+      ElMessage.error(res.msg || '批量设置点赞数失败');
+    }
+    return res;
+  } catch (error) {
+    console.error('batchSetLike: 请求失败', error);
     ElMessage.error('网络异常');
     return null;
   }

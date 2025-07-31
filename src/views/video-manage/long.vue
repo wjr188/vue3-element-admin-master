@@ -94,6 +94,10 @@
         <el-form-item>
           <el-button type="success" @click="onBatchSetCollect" size="small" :disabled="selectedRows.length === 0">批量设置收藏</el-button>
         </el-form-item>
+        <!-- 新增：批量设置点赞 -->
+        <el-form-item>
+          <el-button type="warning" @click="onBatchSetLike" size="small" :disabled="selectedRows.length === 0">批量设置点赞</el-button>
+        </el-form-item>
         <!-- 升序置顶 -->
         <el-form-item>
           <el-button type="primary" size="small" @click="onBatchSortAsc" :disabled="selectedRows.length === 0" style="min-width: 60px;">升序置顶</el-button>
@@ -170,6 +174,7 @@
         </el-table-column>
         <el-table-column prop="play" label="播放" min-width="60" align="center" />
         <el-table-column prop="collect" label="收藏" min-width="55" align="center" />
+        <el-table-column prop="like" label="点赞" min-width="55" align="center" />
         <el-table-column prop="upload_time" label="上传" min-width="90" align="center" />
         <el-table-column label="操作" fixed="right" width="122" align="center">
           <template #default="scope">
@@ -273,6 +278,19 @@
       </template>
     </el-dialog>
 
+    <!-- 批量设置点赞弹窗 -->
+    <el-dialog v-model="batchLikeDialogVisible" title="批量设置点赞数" width="350px">
+      <el-form>
+        <el-form-item label="点赞数">
+          <el-input-number v-model="batchLikeValue" :min="0" style="width: 120px" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchLikeDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitBatchLike">确定</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 编辑视频弹窗 -->
     <el-dialog v-model="editDialogVisible" title="编辑视频" width="480px" @close="onEditDialogClose">
       <el-form :model="editForm" label-width="82px" size="small" ref="editFormRef">
@@ -360,6 +378,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 // 导入长视频 Store
 import {
+  batchSetLike,
   videos,
   videoTotal,
   videoLoading,
@@ -424,6 +443,7 @@ interface VideoRow {
   status: string
   play: number
   collect: number
+  like: number // 新增：点赞字段
   upload_time: string
   parentName?: string
   categoryName?: string
@@ -607,6 +627,33 @@ async function submitBatchCollect() {
   await fetchVideoList({ ...searchForm.value });
 }
 
+// 批量设置点赞弹窗
+const batchLikeDialogVisible = ref(false)
+const batchLikeValue = ref(0)
+
+function onBatchSetLike() {
+  if (!selectedRows.value.length) {
+    return ElMessage.warning('请先勾选需要操作的视频');
+  }
+  batchLikeDialogVisible.value = true;
+}
+
+// 批量设置点赞弹窗 - 修复版
+async function submitBatchLike() {
+  if (batchLikeValue.value < 0) {
+    return ElMessage.warning('点赞数不能小于0');
+  }
+  const ids = selectedRows.value.map(v => v.id);
+  const res = await batchSetLike(ids, batchLikeValue.value);
+  console.log('【批量设置点赞返回】', res);
+  
+  // 因为 store 成功时返回 null，失败时会抛异常，所以能执行到这里就是成功
+  ElMessage.success('点赞数设置成功！');
+  batchLikeDialogVisible.value = false;
+  selectedRows.value = [];
+  await fetchVideoList({ ...searchForm.value });
+}
+
 // 批量设置VIP
 async function onBatchVip() {
   if (!selectedRows.value.length) {
@@ -739,13 +786,13 @@ async function submitAdd() {
   delete (submitData as any).coin;
   // 由于 addForm 现在直接使用 url，无需在这里删除 m3u8
 
-  const res = await addVideo(submitData); // 调用 Store 函数
-  if (res) { // 因为 store 已经统一返回 res 对象，这里直接判断 res 存在即可
+  const res = await addVideo(submitData);
+  if (res) {
     ElMessage.success('添加成功');
     addDialogVisible.value = false;
-    // 添加成功后，fetchVideoList 会自动刷新列表
+    // 只刷新当前页，不重置到第一页
+    await fetchVideoList({ ...searchForm.value });
   } else {
-    // ElMessage.error(res?.msg || '添加失败');
     ElMessage.error('添加失败');
   }
 }
@@ -784,19 +831,15 @@ async function onEdit(row: VideoRow) {
   const res = await fetchVideoDetail(row.id); // 调用 Store 函数获取详情
   // 修正：request.ts 成功时只返回 data，所以 res 直接就是 data
   if (res && typeof res === 'object') { // 确保 res 是一个有效的对象
-    // 填充表单，注意后端返回的 is_vip 和 gold 需要转换为前端的 vip 和 coin
-    // 并且如果后端返回的是 url 字段，直接赋值给 editForm.url
     Object.assign(editForm.value, {
-      ...res, // res 现在直接是后端 data
-      vip: res.is_vip === 1, // 后端 0/1 转前端 boolean
-      coin: res.gold,        // 后端 gold 转前端 coin
-      tags: res.tags || [],  // 确保标签是数组
-      // 这里的视频URL，如果后端返回的是 url 就用 url，如果是 m3u8 也用 m3u8 并赋给 url
-      url: res.url || res.m3u8 || '' // 优先取 url，其次取 m3u8，最后为空
+      ...res, // 其余字段直接覆盖
+      vip: typeof res.vip === 'boolean' ? res.vip : !!res.vip, // 保证布尔
+      coin: typeof res.coin === 'number' ? res.coin : Number(res.coin) || 0, // 保证数字
+      tags: Array.isArray(res.tags) ? res.tags : [],
+      url: res.url || res.m3u8 || '' // 优先取 url，其次 m3u8
     });
     editDialogVisible.value = true;
   } else {
-    // ElMessage.error(res?.msg || '获取视频详情失败');
     ElMessage.error('获取视频详情失败');
   }
 }
@@ -828,13 +871,13 @@ async function submitEdit() {
   delete (submitData as any).coin;
   // `url` 字段现在直接在 submitData 中了，不需要 m3u8 -> url 转换和删除 m3u8
 
-  const res = await updateVideo(submitData); // 调用 Store 函数
-  if (res) { // 因为 store 已经统一返回 res 对象，这里直接判断 res 存在即可
+  const res = await updateVideo(submitData);
+  if (res) {
     ElMessage.success('保存成功');
     editDialogVisible.value = false;
-    // 保存成功后，fetchVideoList 会自动刷新列表
+    // 只刷新当前页，不重置到第一页
+    await fetchVideoList({ ...searchForm.value });
   } else {
-    // ElMessage.error(res?.msg || '保存失败');
     ElMessage.error('保存失败');
   }
 }

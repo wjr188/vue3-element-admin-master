@@ -375,11 +375,15 @@ function onAdd() {
  */
 function onEdit(row: any) {
   dialogType.value = 'edit';
-  // 复制当前行数据到表单
-  dialogForm.value = { ...row };
+  dialogForm.value = {
+    id: row.id,
+    name: row.name || '',
+    parent_id: typeof row.parent_id === 'number' ? row.parent_id : 0,
+    sort: typeof row.sort === 'number' ? row.sort : 0,
+    status: typeof row.status === 'number' ? row.status : 1
+  };
   dialogVisible.value = true;
 }
-
 /**
  * 提交新增/编辑表单
  */

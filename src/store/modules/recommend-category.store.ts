@@ -166,31 +166,16 @@ export const useRecommendCategoryStore = defineStore('recommendCategory', {
         // 【DEBUG】在这里打印接收到的原始 videos 参数
         console.log('【DEBUG】saveVideosForGroup 接收到的 videos:', JSON.parse(JSON.stringify(videos)));
 
-        // 1. 从 state 中找到当前分组 (修正了类型匹配问题，并增加了更明确的错误提示)
-        // 使用 == 而不是 === 来避免字符串和数字的类型问题
-        const group = this.recommendGroups.find(g => g.id == groupId); 
-
-        if (!group) {
-            ElMessage.error(`错误：在当前分组列表里找不到 ID 为 "${groupId}" 的分组。`);
-            return false;
-        }
-        if (!group.category_id) {
-            ElMessage.error(`错误：分组 "${group.name}" 自身缺少 category_id 属性，无法保存。`);
-            return false;
-        }
-        const categoryId = group.category_id;
-
-        // 2. 构造一个包含 video_id, sort, 和 category_id 的对象数组
+        // 构造一个包含 video_id 和 sort 的对象数组
         let payload = [];
         if (Array.isArray(videos)) {
           payload = videos.map(v => ({
             video_id: Number(v.video_id), // 确保是数字
             sort: Number(v.sort),         // 确保是数字
-            category_id: Number(categoryId) // 添加 category_id 并确保是数字
           }));
         }
 
-        // 3. 将数组包装在一个名为 "videos" 的对象中发送
+        // 将数组包装在一个名为 "videos" 的对象中发送
         const res = await axios.post(`/api/api/recommend/groups/${groupId}/videos`, { videos: payload });
         ElMessage.success(res?.msg || '视频保存成功');
         return true;

@@ -45,14 +45,19 @@ export function batchSetAudioNovelVisibilityAPI(ids: number[], status: number) {
   return request.post('/api/audio_novel/batchSetVisibility', { ids, status });
 }
 
-// 批量设置VIP免费
-export function batchSetAudioNovelVipFreeAPI(ids: number[], status: number) {
-  return request.post('/api/audio_novel/batchSetVipFree', { ids, status });
+// 批量设置VIP（所有章节VIP）
+export function batchSetAudioNovelVipAPI(ids: number[], is_vip: number) {
+  return request.post('/api/audio_novel/batchSetVip', { ids, is_vip });
 }
 
-// 批量设置每集金币
-export function batchSetAudioNovelCoinPerChapterAPI(ids: number[], coin: number) {
-  return request.post('/api/audio_novel/batchSetCoinPerChapter', { ids, coin });
+// 批量取消VIP（所有章节免费）
+export function batchCancelAudioNovelVipAPI(ids: number[]) {
+  return request.post('/api/audio_novel/batchCancelVip', { ids });
+}
+
+// 批量设置金币（所有章节同步）
+export function batchSetAudioNovelCoinAPI(ids: number[], coin: number) {
+  return request.post('/api/audio_novel/batchSetCoin', { ids, coin });
 }
 
 // 批量设置演播人
