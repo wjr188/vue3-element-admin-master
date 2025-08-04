@@ -59,12 +59,11 @@
         <el-table-column type="selection" width="40" align="center" />
         <el-table-column prop="id" label="#编号" width="60" align="center" />
         <el-table-column prop="name" label="分类名称" min-width="120" align="center" />
-        <el-table-column prop="parent_name" label="父级分类" width="120" align="center">
-          <template #default="scope">
-            <span v-if="scope.row.parent_id === 0">无</span>
-            <span v-else>{{ getParentCategoryName(scope.row.parent_id) }}</span>
-          </template>
-        </el-table-column>
+        <el-table-column label="父级分类" width="120" align="center">
+  <template #default="scope">
+    {{ getParentCategoryName(scope.row.parent_id) }}
+  </template>
+</el-table-column>
         <el-table-column prop="status" label="状态" width="80" align="center">
           <template #default="scope">
             <el-tag :type="scope.row.status === 1 ? 'success' : 'info'" size="small">
@@ -96,17 +95,12 @@
           <el-input v-model="dialogForm.name" placeholder="请输入分类名称" clearable />
         </el-form-item>
         <el-form-item label="父级分类">
-          <el-select v-model="dialogForm.parent_id" placeholder="选择父级分类" style="width:100%" clearable>
-            <el-option label="无父级 (主分类)" :value="0" />
-            <el-option
-              v-for="item in audioNovelMainCategories"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-              :disabled="dialogType === 'edit' && dialogForm.id === item.id"
-            />
-          </el-select>
-        </el-form-item>
+  <el-select v-model="searchForm.parentId" placeholder="全部父级分类" clearable style="width: 130px;">
+    <el-option label="全部父级" value="" />
+    <el-option label="无父级 (主分类)" :value="0" />
+    <el-option v-for="item in allAudioNovelCategories" :key="item.id" :label="item.name" :value="item.id" />
+  </el-select>
+</el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="dialogForm.sort" :min="0" style="width: 120px" />
         </el-form-item>
@@ -146,14 +140,12 @@ const dialogForm = ref<any>({
 });
 const dialogLoading = ref(false);
 const sortLoading = ref(false);
-
-
 const allAudioNovelCategories = computed(() => {
   let categories = [...categoryStore.mainCategories, ...categoryStore.subCategories];
   let filtered = categories.filter(cat => {
     const matchesKeyword = !searchForm.value.keyword || cat.name.includes(searchForm.value.keyword);
-    const matchesParentId = searchForm.value.parentId === '' || cat.parent_id === searchForm.value.parentId;
-    const matchesStatus = searchForm.value.status === '' || cat.status === searchForm.value.status;
+    const matchesParentId = searchForm.value.parentId === '' || Number(cat.parent_id) === Number(searchForm.value.parentId);
+    const matchesStatus = searchForm.value.status === '' || Number(cat.status) === Number(searchForm.value.status);
     return matchesKeyword && matchesParentId && matchesStatus;
   });
   filtered.sort((a, b) => a.sort - b.sort);
@@ -169,7 +161,9 @@ function handleSelectionChange(rows: any[]) {
 }
 
 function getParentCategoryName(parentId: number) {
-  const parent = categoryStore.mainCategories.find(cat => cat.id === parentId);
+  if (parentId === 0) return '无';
+  const all = [...categoryStore.mainCategories, ...categoryStore.subCategories];
+  const parent = all.find(cat => cat.id === parentId);
   return parent ? parent.name : '未知';
 }
 

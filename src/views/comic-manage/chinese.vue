@@ -40,7 +40,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="onSearch" size="small">搜索</el-button>
+          <el-button type="primary" @click="() => onSearch(true)" size="small">搜索</el-button>
         </el-form-item>
         <el-form-item>
           <el-button @click="onReset" size="small">重置</el-button>
@@ -173,8 +173,6 @@
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
         :total="mangaTotal"
-        @size-change="onSearch"
-        @current-change="onSearch"
         background
         style="margin-top: 20px; justify-content: flex-end;"
       />
@@ -287,7 +285,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useComicCategoryStore } from '@/store/modules/comicCategory.store'
 import { useComicTagsStore } from '@/store/modules/comicTags.store'
@@ -374,7 +372,9 @@ onMounted(async () => {
   await tagStore.fetchTags()
   await mangaStore.fetchMangaList(searchForm.value)
 });
-
+watch([() => searchForm.value.page, () => searchForm.value.pageSize], () => {
+  onSearch()
+})
 // ======================= 数据获取与列表操作 =======================
 
 /**
@@ -387,18 +387,18 @@ async function fetchMangaList() {
 /**
  * 搜索按钮点击
  */
-function onSearch() {
+function onSearch(resetPage = false) {
+  if (resetPage) searchForm.value.page = 1
   const searchParams = {
     page: searchForm.value.page,
     pageSize: searchForm.value.pageSize,
     keyword: searchForm.value.keyword,
-    category_id: searchForm.value.mainCategoryId,        // mainCategoryId -> category_id
-    sub_category_id: searchForm.value.subCategoryId,     // subCategoryId -> sub_category_id
+    category_id: searchForm.value.mainCategoryId,
+    sub_category_id: searchForm.value.subCategoryId,
     tag: searchForm.value.tag,
-    is_serializing: searchForm.value.serializationStatus, // serializationStatus -> is_serializing
-    is_shelf: searchForm.value.shelfStatus,               // shelfStatus -> is_shelf
+    is_serializing: searchForm.value.serializationStatus,
+    is_shelf: searchForm.value.shelfStatus,
   }
-  searchForm.value.page = 1
   mangaStore.fetchMangaList(searchParams)
 }
 
@@ -417,7 +417,7 @@ function onReset() {
     serializationStatus: '',
     shelfStatus: '',
   };
-  fetchMangaList();
+  onSearch(true);
 }
 
 /**
@@ -441,7 +441,7 @@ async function onBatchDelete() {
     await mangaStore.batchDeleteManga(ids);
     ElMessage.success('批量删除成功');
     selectedRows.value = [];
-    fetchMangaList();
+    onSearch();
   } catch (err: any) {
     ElMessage.error(err?.message || '批量删除失败');
   }
@@ -464,7 +464,7 @@ async function onBatchSetSerializationStatus() {
     await mangaStore.batchSetSerializationStatus(ids, 1);
     ElMessage.success('批量设置为连载中成功');
     selectedRows.value = [];
-    fetchMangaList();
+    onSearch();
   }).catch(async (action) => {
     if (action === 'cancel') {
       await ElMessageBox.confirm('确定批量设置已完结吗？', '提示', {
@@ -476,7 +476,7 @@ async function onBatchSetSerializationStatus() {
         await mangaStore.batchSetSerializationStatus(ids, 0);
         ElMessage.success('批量设置为已完结成功');
         selectedRows.value = [];
-        fetchMangaList();
+        onSearch();
       }).catch(() => {
         ElMessage.info('已取消设置');
       });
@@ -503,7 +503,7 @@ async function onBatchSetShelfStatus() {
     await mangaStore.batchSetShelfStatus(ids, 1);
     ElMessage.success('批量设置上架成功');
     selectedRows.value = [];
-    fetchMangaList();
+    onSearch();
   }).catch(async (action) => {
     if (action === 'cancel') {
       await ElMessageBox.confirm('确定批量设置下架吗？', '提示', {
@@ -515,7 +515,7 @@ async function onBatchSetShelfStatus() {
         await mangaStore.batchSetShelfStatus(ids, 0);
         ElMessage.success('批量设置下架成功');
         selectedRows.value = [];
-        fetchMangaList();
+        onSearch();
       }).catch(() => {
         ElMessage.info('已取消设置');
       });
@@ -544,7 +544,7 @@ async function onBatchSetVip() {
     }
     ElMessage.success('批量设置VIP成功');
     selectedRows.value = [];
-    fetchMangaList();
+    onSearch();
   }).catch(() => {
     ElMessage.info('已取消设置VIP');
   });
@@ -574,7 +574,7 @@ async function onBatchSetCoin() {
     }
     ElMessage.success('批量设置金币成功');
     selectedRows.value = [];
-    fetchMangaList();
+    onSearch();
   }).catch(() => {
     ElMessage.info('已取消设置金币');
   });
@@ -685,7 +685,7 @@ async function submitDialog() {
     // 只要没报错就认为成功
     ElMessage.success(dialogType.value === 'add' ? '添加成功' : '保存成功');
     dialogVisible.value = false;
-    fetchMangaList();
+    onSearch();
   } catch (error) {
     console.error('提交异常:', error);
     ElMessage.error('提交失败');
@@ -716,7 +716,7 @@ async function onDelete(row: any) {
   const res = await mangaStore.deleteManga(row.id);
   if (res && res.code == 0) {  // 改这里：=== 改成 ==
     ElMessage.success('删除成功');
-    fetchMangaList();
+    onSearch();
   } else {
     ElMessage.error(res?.msg || '删除失败');
   }

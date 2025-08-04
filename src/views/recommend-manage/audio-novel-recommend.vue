@@ -102,7 +102,9 @@
   <el-form-item label="图标文件" prop="icon">
     <el-input v-model="groupForm.icon" placeholder="如 hot1.svg，留空不显示" style="width: 180px;">
       <template #append>
-        <img v-if="groupForm.icon" :src="`/icons/${groupForm.icon}`" style="width: 24px; height: 24px; margin-left: 4px;" alt="icon预览" @error="e => (e.target.style.display='none')" />
+       <img v-if="groupForm.icon" :src="`/icons/${groupForm.icon}`"
+  style="width: 24px; height: 24px; margin-left: 4px;" alt="icon预览"
+  @error="e => { (e.target as HTMLImageElement).style.display = 'none' }" />
       </template>
     </el-input>
   </el-form-item>
@@ -132,8 +134,8 @@
               <el-form-item label="关键词">
                 <el-input v-model="novelFilterForm.keyword" placeholder="搜索小说标题/ID" clearable @keyup.enter="searchNovels"></el-input>
               </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="searchNovels">搜索</el-button>
+              <el-form-item>              
+<el-button type="primary" @click="() => searchNovels(true)">搜索</el-button>
                 <el-button @click="resetNovelFilters">重置</el-button>
               </el-form-item>
             </el-form>
@@ -262,7 +264,7 @@ function openAddGroupDialog() {
   const maxSort = store.recommendGroups && store.recommendGroups.length > 0
     ? Math.max(...store.recommendGroups.map(g => g.sort || 0))
     : 0;
-  groupForm.value = { id: null, name: '', sort: maxSort + 1, status: 1, type: 'audio' };
+  groupForm.value = { id: null, name: '', sort: maxSort + 1, status: 1, type: 'audio', layout_type: 'type1', icon: '' };
   groupFormDialogVisible.value = true;
   nextTick(() => {
     groupFormRef.value?.clearValidate();
@@ -284,57 +286,58 @@ function layoutTypeText(type: string) {
 function openEditGroupDialog(row: any) {
   isEditGroup.value = true;
   groupForm.value = { 
-    id: row.id, 
-    name: row.name, 
-    sort: row.sort, 
-    status: row.status, 
-    type: 'audio' // 固定为有声类型
-  };
+  id: row.id, 
+  name: row.name, 
+  sort: row.sort, 
+  status: row.status, 
+  type: 'audio',
+  layout_type: row.layout_type || 'type1',
+  icon: row.icon || '',
+};
   groupFormDialogVisible.value = true;
   nextTick(() => {
     groupFormRef.value?.clearValidate();
   });
 }
-
 async function submitGroupForm() {
   try {
     await groupFormRef.value?.validate();
     let response;
     if (isEditGroup.value) {
       response = await store.updateRecommendGroup(
-  groupForm.value.id!,
-  {
-    name: groupForm.value.name,
-    sort: groupForm.value.sort,
-    status: groupForm.value.status,
-    type: groupForm.value.type,
-    layout_type: groupForm.value.layout_type,
-    icon: groupForm.value.icon,
-  }
-);
+        groupForm.value.id!,
+        {
+          name: groupForm.value.name,
+          sort: groupForm.value.sort,
+          status: groupForm.value.status,
+          type: groupForm.value.type,
+          layout_type: groupForm.value.layout_type,
+          icon: groupForm.value.icon,
+        }
+      );
     } else {
       response = await store.addRecommendGroup({
-  name: groupForm.value.name,
-  sort: groupForm.value.sort,
-  status: groupForm.value.status,
-  type: groupForm.value.type,
-  layout_type: groupForm.value.layout_type,
-  icon: groupForm.value.icon,
-});
+        name: groupForm.value.name,
+        sort: groupForm.value.sort,
+        status: groupForm.value.status,
+        type: groupForm.value.type,
+        layout_type: groupForm.value.layout_type,
+        icon: groupForm.value.icon,
+      });
     }
+
+    // 只弹成功，失败也直接关弹窗和刷新（无提示）
     if (response && response.code === 0) {
       ElMessage.success(response.msg || (isEditGroup.value ? '分组更新成功！' : '分组添加成功！'));
-      groupFormDialogVisible.value = false;
-      await store.fetchRecommendGroups();
-      await updateGroupAudioNovelCounts();
-    } else {
-      ElMessage.error(response?.msg || '操作失败，请重试！');
     }
   } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败，请重试！');
-      console.error('Group form submit error:', error);
-    }
+    // 校验失败会抛出 error，啥都不做
+    return;
+  } finally {
+    // 无论什么情况都关弹窗并刷新
+    groupFormDialogVisible.value = false;
+    await store.fetchRecommendGroups();
+    await updateGroupAudioNovelCounts();
   }
 }
 
@@ -474,11 +477,11 @@ async function searchNovels(resetPage = false) {
 
     // 2. 拉取所有可选有声小说
     const params = {
-      keyword: novelFilterForm.value.keyword,
-      currentPage: novelPagination.value.currentPage,
-      pageSize: novelPagination.value.pageSize,
-    };
-    const res = await store.fetchAllAudioNovels(params);
+  keyword: novelFilterForm.value.keyword,
+  page: novelPagination.value.currentPage, // 这里必须是 page
+  pageSize: novelPagination.value.pageSize,
+};
+const res = await store.fetchAllAudioNovels(params);
 
     // 3. 当前页数据过滤掉已被其他分组选中的
     allNovelList.value = res.list.filter((n: any) => !usedAudioNovelIds.has(Number(n.audio_novel_id)));
@@ -535,7 +538,7 @@ function addNovelToSelected(novels: any[]) {
     setupSelectedNovelSortable();
   });
 
-  searchNovels(true);
+  searchNovels();
 }
 
 function removeNovelFromSelected(audioNovelId: number) {

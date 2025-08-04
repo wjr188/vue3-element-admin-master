@@ -111,12 +111,25 @@
         <el-table-column prop="title" label="标题" min-width="100" align="center" />
         <el-table-column prop="narrator" label="演播人" min-width="80" align="center" />
         <el-table-column prop="author" label="作者" min-width="80" align="center" />
-        <el-table-column prop="category_name" label="分类" min-width="90" align="center" />
+        <el-table-column prop="category_id" label="分类" min-width="90" align="center">
+  <template #default="scope">
+    {{ categoryMap[scope.row.category_id] || '未知' }}
+  </template>
+</el-table-column>
         <el-table-column prop="tags" label="标签" min-width="100" align="center">
-          <template #default="scope">
-            <el-tag v-for="t in scope.row.tags" :key="t" size="small" type="danger" style="margin:1px;">{{ t }}</el-tag>
-          </template>
-        </el-table-column>
+  <template #default="scope">
+    <el-tag
+      v-for="tid in scope.row.tags"  
+      :key="tid"
+      size="small"
+      type="danger"
+      style="margin:1px;"
+    >
+      {{ tagNameMap[tid] || tid }}  
+    </el-tag>
+  </template>
+</el-table-column>
+
         <el-table-column prop="chapter_count" label="集数" width="60" align="center" />
         <el-table-column prop="total_duration" label="总时长" width="80" align="center">
           <template #default="scope">
@@ -156,6 +169,26 @@
     <el-tag v-else type="info" size="small">0</el-tag>
   </template>
 </el-table-column>
+<!-- 阅读量 -->
+<el-table-column prop="views" label="阅读量" width="70" align="center">
+  <template #default="scope">
+    <el-tag size="small" type="info">{{ scope.row.views ?? 0 }}</el-tag>
+  </template>
+</el-table-column>
+
+<!-- 点赞 -->
+<el-table-column prop="likes" label="点赞" width="70" align="center">
+  <template #default="scope">
+    <el-tag size="small" type="success">{{ scope.row.likes ?? 0 }}</el-tag>
+  </template>
+</el-table-column>
+
+<!-- 收藏 -->
+<el-table-column prop="collects" label="收藏" width="70" align="center">
+  <template #default="scope">
+    <el-tag size="small" type="warning">{{ scope.row.collects ?? 0 }}</el-tag>
+  </template>
+</el-table-column>
         <el-table-column prop="publish_time" label="发布时间" min-width="100" align="center" />
         <el-table-column label="操作" fixed="right" width="200" align="center">
           <template #default="scope">
@@ -173,8 +206,8 @@
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
         :total="audioNovelTotal"
-        @size-change="onSearch"
-        @current-change="onSearch"
+        @size-change="handleSizeChange"
+        @current-change="handlePageChange"
         background
         style="margin-top: 20px; justify-content: flex-end;"
       />
@@ -198,10 +231,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="标签">
-          <el-select v-model="dialogForm.tags" multiple clearable collapse-tags style="width:100%">
-            <el-option v-for="t in audioNovelTags" :key="t.id" :label="t.name" :value="t.name" />
-          </el-select>
-        </el-form-item>
+  <el-select v-model="dialogForm.tags" multiple clearable collapse-tags style="width:100%">
+    <el-option v-for="t in audioNovelTags" :key="t.id" :label="t.name" :value="t.id" />
+  </el-select>
+</el-form-item>
         <el-form-item label="封面图">
           <el-upload
             action="YOUR_UPLOAD_API_URL" 
@@ -239,6 +272,15 @@
 <el-form-item label="金币">
   <el-input-number v-model="dialogForm.coin" :min="0" style="width: 120px" />
 </el-form-item>
+<el-form-item label="阅读量">
+  <el-input-number v-model="dialogForm.views" :min="0" style="width: 120px" />
+</el-form-item>
+<el-form-item label="点赞">
+  <el-input-number v-model="dialogForm.likes" :min="0" style="width: 120px" />
+</el-form-item>
+<el-form-item label="收藏">
+  <el-input-number v-model="dialogForm.collects" :min="0" style="width: 120px" />
+</el-form-item>
         <el-form-item>
           <el-button type="primary" @click="submitDialog" :loading="dialogLoading">{{ dialogType==='add'?'确定':'保存' }}</el-button>
           <el-button @click="dialogVisible=false">取消</el-button>
@@ -261,6 +303,11 @@
           <p><strong>集数:</strong> {{ currentPreviewAudioNovel.chapter_count || 0 }}</p>
           <p><strong>总时长:</strong> {{ formatDuration(currentPreviewAudioNovel.total_duration) }}</p>
           <p><strong>描述:</strong> {{ currentPreviewAudioNovel.description || '暂无描述' }}</p>
+          <p>
+  <strong>阅读量:</strong> {{ currentPreviewAudioNovel.views ?? 0 }}
+  <strong style="margin-left: 20px;">点赞:</strong> {{ currentPreviewAudioNovel.likes ?? 0 }}
+  <strong style="margin-left: 20px;">收藏:</strong> {{ currentPreviewAudioNovel.collects ?? 0 }}
+</p>
           <p><strong>标签:</strong>
             <el-tag v-for="t in currentPreviewAudioNovel.tags" :key="t" size="small" type="danger" style="margin:1px;">{{ t }}</el-tag>
             <span v-if="!currentPreviewAudioNovel.tags || currentPreviewAudioNovel.tags.length === 0">无</span>
@@ -279,12 +326,12 @@
 
     <!-- 章节管理弹窗 (AudioNovelChapterManageDialog.vue 组件) -->
     <AudioNovelChapterManageDialog
-      v-if="chapterManageDialogVisible"
-      :novel-id="currentAudioNovelForChapterManage?.id"
-      :novel-title="currentAudioNovelForChapterManage?.title"
-      :audio-url-prefix="currentAudioNovelForChapterManage?.audio_url_prefix"
-      @close="chapterManageDialogVisible = false; onSearch();"
-    />
+  v-if="chapterManageDialogVisible"
+  :novel-id="currentAudioNovelForChapterManage?.id"
+  :novel-title="currentAudioNovelForChapterManage?.title"
+  :audio-url-prefix="currentAudioNovelForChapterManage?.audio_url_prefix"
+  @close="onCloseChapterDialog"
+/>
   </div>
 </template>
 
@@ -305,6 +352,29 @@ const audioNovelStore = useAudioNovelStore()
 const categoryStore = useAudioNovelCategoryStore()
 const tagStore = useAudioNovelTagStore()
 const chapterStore = useAudioNovelChapterStore()
+const allowedFields = [
+  'id', 'title', 'narrator', 'author', 'description', 'cover_url',
+  'audio_url_prefix', 'category_id', 'tags', 'serialization_status',
+  'shelf_status', 'visibility', 'is_vip', 'coin', 'views', 'likes', 'collects'
+]
+
+// 过滤表单，只留数据库字段
+function filterNovelPayload(data: Record<string, any>) {
+  const payload: Record<string, any> = {}
+  allowedFields.forEach(key => {
+    if (data[key] !== undefined) payload[key] = data[key]
+  })
+  // tags 数组转 JSON
+  if (Array.isArray(payload.tags)) {
+    payload.tags = payload.tags.length ? JSON.stringify(payload.tags) : '[]'
+  }
+  return payload
+}
+const tagNameMap = computed<Record<number, string>>(() => {
+  const map: Record<number, string> = {}
+  audioNovelTags.value.forEach(t => { map[t.id] = t.name })  // 确保这里的 tag.id 对应到中文标签
+  return map
+})
 
 // 搜索表单
 const searchForm = ref({
@@ -319,7 +389,13 @@ const searchForm = ref({
   shelfStatus: '',
   visibility: '',
 })
-
+const categoryMap = computed(() => {
+  const map: Record<string, string> = {};
+  audioNovelMainCategories.value.forEach(item => {
+    map[item.id] = item.name;
+  });
+  return map;
+});
 // 表格多选
 const selectedRows = ref<any[]>([])
 
@@ -340,8 +416,11 @@ const dialogForm = ref<any>({
   serialization_status: 1,
   shelf_status: 1,
   visibility: 1,
-  is_vip_free: 0,
-  coin_per_chapter: 0,
+  is_vip: 0,
+  coin: 0,
+  views: 0,
+  likes: 0,
+  collects: 0,
 })
 const dialogLoading = ref(false)
 
@@ -401,7 +480,15 @@ function formatDuration(seconds: number): string {
 async function fetchTableData() {
   await audioNovelStore.fetchList(searchForm.value);
 }
-
+function handlePageChange(page) {
+  searchForm.value.page = page;
+  fetchTableData();
+}
+function handleSizeChange(size) {
+  searchForm.value.pageSize = size;
+  searchForm.value.page = 1; // 换每页条数时回到第一页
+  fetchTableData();
+}
 /**
  * 搜索按钮点击
  */
@@ -707,7 +794,7 @@ function onAdd() {
   dialogForm.value = {
     id: null, title: '', narrator: '', author: '', description: '', cover_url: '', cover_file_list: [],
     audio_url_prefix: '', category_id: '', tags: [], serialization_status: 1, shelf_status: 1,
-    visibility: 1, is_vip_free: 0, coin_per_chapter: 0,
+    visibility: 1, is_vip: 0, coin: 0,
   };
   dialogVisible.value = true;
 }
@@ -748,11 +835,10 @@ async function submitDialog() {
 
   dialogLoading.value = true;
   try {
-    const submitData = {
-      ...dialogForm.value,
-      cover_url: dialogForm.value.cover_file_list.length > 0 ? dialogForm.value.cover_file_list[0].url : '',
-    };
-    delete submitData.cover_file_list;
+    const submitData = filterNovelPayload({
+  ...dialogForm.value,
+  cover_url: dialogForm.value.cover_file_list.length > 0 ? dialogForm.value.cover_file_list[0].url : '',
+})
 
     let res;
     if (dialogType.value === 'add') {
@@ -836,6 +922,8 @@ async function onDelete(row: any) {
     ElMessage.info('已取消删除');
   });
 }
+// 章节弹窗分页缓存
+const chapterPageMap = ref<{ [novelId: number]: number }>({})   // novelId: page
 
 /**
  * 打开章节管理弹窗
@@ -845,6 +933,12 @@ async function onManageChapters(row: any) {
   currentAudioNovelForChapterManage.value = row;
   chapterManageDialogVisible.value = true;
 }
+// 关闭章节管理弹窗（这里 onSearch 就是刷新页面）
+function onCloseChapterDialog() {
+  chapterManageDialogVisible.value = false
+  fetchTableData()   // 只刷新，不改分页！
+}
+
 
 // ======================= 封面图上传 =======================
 

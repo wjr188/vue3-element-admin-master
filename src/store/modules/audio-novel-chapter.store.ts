@@ -20,31 +20,38 @@ export const useAudioNovelChapterStore = defineStore('audioNovelChapter', {
   }),
   actions: {
     async fetchList(params: any) {
-      this.loading = true;
-      try {
-        const res = await fetchAudioNovelChaptersAPI(params);
-        if (res.data.code === 0) {
-          this.list = res.data.data.list || [];
-          this.total = res.data.data.total || 0;
-        }
-        return res.data;
-      } catch (e) {
-        return { code: 1, msg: '获取章节列表请求失败' };
-      } finally {
-        this.loading = false;
-      }
-    },
+  this.loading = true;
+  try {
+    // 强制带上 type: 'admin'
+    const res = await fetchAudioNovelChaptersAPI({
+      ...params,
+      type: 'admin'
+    });
+    if (res.data.code === 0) {
+      this.list = res.data.data.list || [];
+      this.total = res.data.data.total || 0;
+    }
+    return res.data;
+  } catch (e) {
+    return { code: 1, msg: '获取章节列表请求失败' };
+  } finally {
+    this.loading = false;
+  }
+},
+
     async fetchDetail(id: number) {
-      try {
-        const res = await fetchAudioNovelChapterDetailAPI(id);
-        if (res.data.code === 0) {
-          this.detail = res.data.data;
-        }
-        return res.data;
-      } catch (e) {
-        return { code: 1, msg: '获取章节详情请求失败' };
-      }
-    },
+  try {
+    // 这里要把 type: 'admin' 也传给接口
+    const res = await fetchAudioNovelChapterDetailAPI(id, { type: 'admin' });
+    if (res.data.code === 0) {
+      this.detail = res.data.data;
+    }
+    return res.data;
+  } catch (e) {
+    return { code: 1, msg: '获取章节详情请求失败' };
+  }
+},
+
     async add(data: any) {
       try {
         const res = await addAudioNovelChapterAPI(data);
