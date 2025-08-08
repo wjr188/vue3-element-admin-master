@@ -14,7 +14,7 @@
         highlight-current
         :expand-on-click-node="true"
         @node-click="onTreeSelect"
-        :current-node-key="currentTreeId"
+        :current-node-key="currentTreeId || undefined"
       >
         <template #default="{ data }">
           <span
@@ -124,6 +124,12 @@
               <el-tag v-else type="info">禁用</el-tag>
             </template>
           </el-table-column>
+          <el-table-column prop="icon" label="头像" width="70" align="center">
+            <template #default="scope">
+              <img v-if="scope.row.icon" :src="scope.row.icon" alt="头像" style="width:32px;height:32px;border-radius:50%;" />
+              <span v-else>--</span>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="140" align="center" fixed="right">
             <template #default="scope">
               <div class="action-group">
@@ -156,6 +162,12 @@
         <el-form-item label="主分类名称" prop="name" required>
           <el-input v-model="editParentData.name" placeholder="请输入主分类名称" />
         </el-form-item>
+        <el-form-item label="头像地址" prop="icon">
+          <el-input v-model="editParentData.icon" placeholder="如 /static/avatar/xxx.webp 或 https://xxx.com/xxx.webp" />
+        </el-form-item>
+        <el-form-item>
+          <img v-if="editParentData.icon" :src="editParentData.icon" alt="预览" style="width:40px;height:40px;border-radius:50%;border:1px solid #eee;" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="parentDialogVisible = false">取消</el-button>
@@ -171,7 +183,13 @@
     >
       <el-form :model="editData" label-width="80px" size="small" ref="childFormRef">
         <el-form-item label="主分类" prop="parent_id" required>
-          <el-select v-model="editData.parent_id" placeholder="选择上级分类" style="width: 100%;">
+          <el-select 
+            v-model="selectedParentId" 
+            placeholder="选择上级分类" 
+            style="width: 100%;" 
+            clearable
+            value-key="id"
+          >
             <el-option
               v-for="item in parentCategories" :key="item.id"
               :label="item.name"
@@ -181,6 +199,10 @@
         </el-form-item>
         <el-form-item label="子分类名称" prop="name" required>
           <el-input v-model="editData.name" placeholder="请输入子分类名称" />
+        </el-form-item>
+        <!-- 新增图标输入框 -->
+        <el-form-item label="图标" prop="icon">
+          <el-input v-model="editData.icon" placeholder="如 /static/avatar/xxx.webp 或 https://xxx.com/xxx.webp" />
         </el-form-item>
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="editData.sort" :min="1" controls-position="right" style="width: 100%;" />
@@ -242,6 +264,12 @@ interface DouyinCategory { // 定义一个统一的 Category 接口，兼容主�
   status: boolean | number // 前端用boolean，后端可能用0/1
   tags?: string[]
   videoCount?: number
+  icon?: string
+}
+
+// 扩展类型，用于表格显示
+interface DouyinCategoryWithParentName extends DouyinCategory {
+  parentName: string
 }
 
 // 统一类型为 DouyinCategory，避免 DouyinParent 和 DouyinChild 混淆
@@ -253,20 +281,19 @@ const treeProps = { label: 'name', children: 'children', isLeaf: 'leaf' }
 
 const categoryTree = computed(() => {
   return parentCategories.value.map((main: DouyinCategory) => {
-    // 确保主分类节点有 id 和 name 属性
     const childrenNodes = childCategories.value
       .filter((c: DouyinCategory) => c.parent_id === main.id)
       .sort((a, b) => (a.sort || 0) - (b.sort || 0))
       .map((c: DouyinCategory) => ({
         id: c.id,
         name: c.name,
-        parent_id: c.parent_id, // 确保子分类也带上 parent_id
-        leaf: true // 子分类是叶子节点
+        parent_id: c.parent_id,
+        leaf: true
       }))
     return {
       id: main.id,
       name: main.name,
-      parent_id: main.parent_id, // 主分类的 parent_id 也带上 (通常为 0 或 null)
+      parent_id: main.parent_id, // ★这里后面加逗号
       children: childrenNodes
     }
   })
@@ -297,8 +324,8 @@ const childCategoryOptions = computed<DouyinCategory[]>(() => {
   return childCategories.value;
 })
 
-const filteredChildCategories = computed<(DouyinCategory & { parentName: string })[]>(() => {
-  let list: DouyinCategory[] = []
+const filteredChildCategories = computed<DouyinCategoryWithParentName[]>(() => {
+  let list: DouyinCategoryWithParentName[] = []
 
   if (currentTreeId.value === null) {
     // 如果没有选中任何分类（或重置了筛选），显示所有主分类和子分类
@@ -360,11 +387,11 @@ const filteredChildCategories = computed<(DouyinCategory & { parentName: string 
 
   // 根据筛选条件过滤
   if (filter.value.child) {
-    list = list.filter((c: DouyinCategory) => c.id === Number(filter.value.child));
+    list = list.filter((c: DouyinCategoryWithParentName) => c.id === Number(filter.value.child));
   }
   if (filter.value.tag) {
     const tagKw = filter.value.tag.toLowerCase();
-    list = list.filter((c: DouyinCategory) => c.tags && c.tags.some(tag => tag.toLowerCase().includes(tagKw)));
+    list = list.filter((c: DouyinCategoryWithParentName) => c.tags && c.tags.some(tag => tag.toLowerCase().includes(tagKw)));
   }
 
   // 排序
@@ -400,7 +427,7 @@ async function onBatchDelete() {
 
   await ElMessageBox.confirm(confirmMessage, '警告', { type: 'warning' }).then(async () => {
     const ids = multipleSelection.value.map((i) => i.id)
-    const res = await batchDeleteCategories(ids)
+    const res: any = await batchDeleteCategories(ids)
     if (res && res.code === 0) {
       ElMessage.success('批量删除成功');
       multipleSelection.value = []; // 清空选中
@@ -414,11 +441,11 @@ async function onBatchDelete() {
 }
 
 const parentDialogVisible = ref<boolean>(false)
-const editParentData = ref<DouyinCategory>({ id: null, name: '', parent_id: 0, sort: 1, status: true }) // 统一类型
+const editParentData = ref<Partial<DouyinCategory>>({ id: undefined, name: '', parent_id: 0, sort: 1, status: true }) // 统一类型
 const parentFormRef = ref<any>(null); // 用于表单验证
 
 function openMainDialog() {
-  editParentData.value = { id: null, name: '', parent_id: 0, sort: 1, status: true } // 初始化主分类数据
+  editParentData.value = { id: undefined, name: '', parent_id: 0, sort: 1, status: true } // 初始化主分类数据
   parentDialogVisible.value = true
   nextTick(() => { // 确保在弹窗 DOM 渲染后重置表单验证状态
     if (parentFormRef.value) {
@@ -430,7 +457,7 @@ function onMainDialogClose() {
     if (parentFormRef.value) {
       parentFormRef.value.resetFields();
     }
-    editParentData.value = { id: null, name: '', parent_id: 0, sort: 1, status: true };
+    editParentData.value = { id: undefined, name: '', parent_id: 0, sort: 1, status: true };
 }
 
 async function onParentSave() {
@@ -438,13 +465,23 @@ async function onParentSave() {
   parentFormRef.value.validate(async (valid: boolean) => {
     if (valid) {
       try {
-        let res;
+        let res: any;
         // 主分类的 parent_id 始终为 0
         const submitData = { ...editParentData.value, parent_id: 0, status: editParentData.value.status ? 1 : 0 }; // 确保 status 是 0/1
         if (submitData.id) {
-          res = await updateCategory(submitData);
+          res = await updateCategory({
+            ...submitData,
+            name: submitData.name!,
+            parent_id: submitData.parent_id!
+          } as DouyinCategory);
         } else {
-          res = await addCategory(submitData); // 后端根据 parent_id 0 识别为主分类
+          // 新建主分类时明确指定type为parent
+          res = await addCategory({ 
+            ...submitData, 
+            type: 'parent',
+            name: submitData.name!,
+            parent_id: 0
+          });
         }
         if (res && res.code === 0) {
           ElMessage.success('主分类保存成功');
@@ -465,21 +502,28 @@ async function onParentSave() {
 }
 
 const dialogVisible = ref<boolean>(false)
-const editData = ref<DouyinCategory>({
-  id: null,
+const editData = ref<Partial<DouyinCategory>>({
+  id: undefined,
   name: '',
-  parent_id: parentCategories.value[0]?.id ?? null, // 默认选中第一个主分类的ID，如果没有则为null
+  parent_id: parentCategories.value[0]?.id ?? undefined, // 默认选中第一个主分类的ID，如果没有则为undefined
   sort: 1,
   status: true,
   tags: []
 })
 const childFormRef = ref<any>(null); // 用于表单验证
 
+const selectedParentId = computed({
+  get: () => editData.value.parent_id ?? '',
+  set: (value) => {
+    editData.value.parent_id = value === '' ? null : Number(value)
+  }
+})
+
 function openDialog() {
   editData.value = {
-    id: null,
+    id: undefined,
     name: '',
-    parent_id: parentCategories.value[0]?.id ?? null,
+    parent_id: parentCategories.value[0]?.id ?? undefined,
     sort: 1,
     status: true,
     tags: []
@@ -500,7 +544,7 @@ function onDialogClose() {
     if (childFormRef.value) {
         childFormRef.value.resetFields();
     }
-    editData.value = { id: null, name: '', parent_id: parentCategories.value[0]?.id ?? null, sort: 1, status: true, tags: [] };
+    editData.value = { id: undefined, name: '', parent_id: parentCategories.value[0]?.id ?? undefined, sort: 1, status: true, tags: [] };
 }
 
 async function onDelete(row: DouyinCategory) { // 统一使用 DouyinCategory 类型
@@ -513,7 +557,7 @@ async function onDelete(row: DouyinCategory) { // 统一使用 DouyinCategory �
   }
 
   await ElMessageBox.confirm(confirmMessage, '警告', { type: 'warning' }).then(async () => {
-    const res = await deleteCategory(row.id) // 调用 Store 中的删除接口
+    const res: any = await deleteCategory(row.id) // 调用 Store 中的删除接口
     if (res && res.code === 0) {
       ElMessage.success('删除成功');
       await fetchCategoryList(); // 刷新列表
@@ -530,7 +574,7 @@ async function onSave() {
   childFormRef.value.validate(async (valid: boolean) => {
     if (valid) {
       try {
-        let res;
+        let res: any;
         // 转换 status 为 0 或 1
         const submitData = { ...editData.value, status: editData.value.status ? 1 : 0 };
         // Tags 可能为空或字符串，确保是数组
@@ -541,9 +585,19 @@ async function onSave() {
         console.log('onSave: 提交数据', submitData);
 
         if (submitData.id) {
-          res = await updateCategory(submitData);
+          res = await updateCategory({
+            ...submitData,
+            name: submitData.name!,
+            parent_id: submitData.parent_id!
+          } as DouyinCategory);
         } else {
-          res = await addCategory(submitData); // 后端根据 parent_id 非 0 识别为子分类
+          // 新建子分类时明确指定type为child
+          res = await addCategory({ 
+            ...submitData, 
+            type: 'child', 
+            name: submitData.name!,
+            parent_id: submitData.parent_id! 
+          });
         }
         if (res && res.code === 0) {
           ElMessage.success('保存成功');
@@ -603,7 +657,14 @@ async function onTagSave() {
 
   try {
     // 假设 updateCategory 接口可以接收部分字段更新，包括 tags
-    const res = await updateCategory({ id: editTagRow.id, tags: uniqueTags });
+    const res: any = await updateCategory({ 
+      id: editTagRow.id, 
+      name: editTagRow.name,
+      parent_id: editTagRow.parent_id || 0,
+      sort: editTagRow.sort,
+      status: editTagRow.status,
+      tags: uniqueTags 
+    } as DouyinCategory);
     if (res && res.code === 0) {
       ElMessage.success('标签更新成功！');
       tagDialogVisible.value = false;
@@ -620,7 +681,7 @@ async function onTagSave() {
 // 单个子分类排序变化
 async function onSortChange(row: DouyinCategory) { // 统一类型
   try {
-    const res = await saveCategorySort([{ id: row.id, sort: row.sort || 0 }]);
+    const res: any = await saveCategorySort([{ id: row.id, sort: row.sort || 0 }]);
     if (res && res.code === 0) {
       ElMessage.success('排序更新成功！');
       await fetchCategoryList(); // 刷新列表以显示最新顺序

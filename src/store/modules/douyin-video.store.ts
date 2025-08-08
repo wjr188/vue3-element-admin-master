@@ -1,4 +1,4 @@
-// 文件路径: src/store/modules/douyin-video.store.ts
+﻿// 文件路径: src/store/modules/douyin-video.store.ts
 
 import { ref } from 'vue'
 import service from '@/utils/request'
@@ -22,7 +22,7 @@ export interface DouyinVideo {
   collect: number;
   upload_time: string;
   m3u8?: string; // 保留 m3u8 字段，用于兼容旧数据，后端可能仍然返回
-  // 其他字段可扩展
+  likes: number;
 }
 
 // 响应式数据
@@ -34,11 +34,15 @@ export const douyinVideoLoading = ref(false);
  * 获取抖音短视频列表
  */
 export async function fetchVideoList(params: any = {}) {
+  console.log('fetchVideoList 请求参数:', params); // 打印分页参数
   douyinVideoLoading.value = true;
   try {
     const res = await service.get('/api/douyin/videos/list', { params });
     if (res) {
-      douyinVideos.value = res.list || [];
+      douyinVideos.value = res.list.map(video => ({
+        ...video,
+        likes: video.like_count ?? 0, // ★这里改成 like_count
+      }));
       douyinVideoTotal.value = res.total || 0;
     } else {
       douyinVideos.value = [];
@@ -67,7 +71,7 @@ export async function addVideo(data: any) {
     const res = await service.post('/api/douyin/videos/add', data);
     if (res) {
       await fetchVideoList();
-      ElMessage.success('新增抖音视频成功');
+      // ElMessage.success('新增抖音视频成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('新增抖音视频失败: 未返回有效数据');
@@ -86,8 +90,8 @@ export async function updateVideo(data: any) {
   try {
     const res = await service.post('/api/douyin/videos/update', data);
     if (res) {
-      await fetchVideoList();
-      ElMessage.success('编辑抖音视频成功');
+      // await fetchVideoList(); // 移除自动刷新，让组件控制刷新时机
+      // ElMessage.success('编辑抖音视频成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('编辑抖音视频失败: 未返回有效数据');
@@ -107,7 +111,7 @@ export async function deleteVideo(id: number) {
     const res = await service.post('/api/douyin/videos/delete', { id });
     if (res) {
       await fetchVideoList();
-      ElMessage.success('删除抖音视频成功');
+      // ElMessage.success('删除抖音视频成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('删除抖音视频失败: 未返回有效数据');
@@ -127,7 +131,7 @@ export async function batchDeleteVideos(ids: number[]) {
     const res = await service.post('/api/douyin/videos/batch-delete', { ids });
     if (res) {
       await fetchVideoList();
-      ElMessage.success('批量删除抖音视频成功');
+      // ElMessage.success('批量删除抖音视频成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('批量删除抖音视频失败: 未返回有效数据');
@@ -147,7 +151,7 @@ export async function batchSetVip(ids: number[], isVip: boolean = true) {
     const res = await service.post('/api/douyin/videos/batch-set-vip', { ids, is_vip: isVip ? 1 : 0 });
     if (res) {
       await fetchVideoList();
-      ElMessage.success('批量设置VIP成功');
+      // ElMessage.success('批量设置VIP成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('批量设置VIP失败: 未返回有效数据');
@@ -174,7 +178,7 @@ export async function batchSetDuration(ids: number[], preview_duration: string) 
     const res = await service.post('/api/douyin/videos/batch-set-preview', { ids, preview: preview_duration });
     if (res) {
       await fetchVideoList();
-      ElMessage.success('批量设置试看时长成功');
+      // ElMessage.success('批量设置试看时长成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('批量设置试看时长失败: 未返回有效数据');
@@ -194,7 +198,7 @@ export async function batchSetGold(ids: number[], gold: number) {
     const res = await service.post('/api/douyin/videos/batch-set-gold', { ids, gold });
     if (res) {
       await fetchVideoList();
-      ElMessage.success('批量设置金币成功');
+      // ElMessage.success('批量设置金币成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('批量设置金币失败: 未返回有效数据');
@@ -233,7 +237,7 @@ export async function batchSortAsc(ids: number[]) {
     const res = await service.post('/api/douyin/videos/batch-sort-asc', { ids });
     if (res) {
       await fetchVideoList(); // 排序后刷新表格
-      ElMessage.success('批量升序置顶成功');
+      // ElMessage.success('批量升序置顶成功'); // 移除 store 中的提示，由组件控制
       return res;
     } else {
       ElMessage.error('批量升序置顶失败: 未返回有效数据');
@@ -241,6 +245,72 @@ export async function batchSortAsc(ids: number[]) {
     }
   } catch (error: any) {
     console.error('请求批量升序置顶失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 批量设置点赞
+ * @param ids 视频ID数组
+ * @param likeCount 点赞数量
+ */
+export async function batchSetLikes(ids: number[], likeCount: number) {
+  try {
+    const res = await service.post('/api/douyin/videos/batch-set-likes', { ids, like_count: likeCount });
+    if (res) {
+      await fetchVideoList(); // 点赞设置成功后刷新视频列表
+      // ElMessage.success('批量设置点赞成功'); // 移除 store 中的提示，由组件控制
+      return res;
+    } else {
+      ElMessage.error('批量设置点赞失败: 未返回有效数据');
+      throw new Error('批量设置点赞失败: 未返回有效数据');
+    }
+  } catch (error: any) {
+    console.error('请求批量设置点赞失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 批量设置收藏
+ * @param ids 视频ID数组
+ * @param collect 收藏数量
+ */
+export async function batchSetCollect(ids: number[], collect: number) {
+  try {
+    const res = await service.post('/api/douyin/videos/batch-set-collect', { ids, collect });
+    if (res) {
+      await fetchVideoList(); // 收藏设置成功后刷新视频列表
+      // ElMessage.success('批量设置收藏成功'); // 移除 store 中的提示，由组件控制
+      return res;
+    } else {
+      ElMessage.error('批量设置收藏失败: 未返回有效数据');
+      throw new Error('批量设置收藏失败: 未返回有效数据');
+    }
+  } catch (error: any) {
+    console.error('请求批量设置收藏失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 批量设置播放数
+ * @param ids 视频ID数组
+ * @param play 播放数量
+ */
+export async function batchSetPlay(ids: number[], play: number) {
+  try {
+    const res = await service.post('/api/douyin/videos/batch-set-play', { ids, play });
+    if (res) {
+      await fetchVideoList();
+      // ElMessage.success('批量设置播放数成功'); // 移除 store 中的提示，由组件控制
+      return res;
+    } else {
+      ElMessage.error('批量设置播放数失败: 未返回有效数据');
+      throw new Error('批量设置播放数失败: 未返回有效数据');
+    }
+  } catch (error: any) {
+    console.error('请求批量设置播放数失败:', error);
     throw error;
   }
 }

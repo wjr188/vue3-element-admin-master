@@ -108,9 +108,24 @@
           v-loading="categoryLoading"
         >
           <el-table-column type="selection" width="50" align="center" />
-          <el-table-column prop="id" label="子分类ID" width="90" align="center" />
-          <el-table-column prop="name" label="子分类名称" min-width="150" align="center" />
-          <el-table-column prop="parentName" label="所属主分类" min-width="120" align="center" />
+          <el-table-column prop="id" label="子分类ID" width="90" align="center">
+            <template #default="scope">
+              <span v-if="scope.row.isParent">--</span>
+              <span v-else>{{ scope.row.id }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="name" label="子分类名称" min-width="150" align="center">
+            <template #default="scope">
+              <span v-if="scope.row.isParent"></span>
+              <span v-else>{{ scope.row.name }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="parentName" label="所属主分类" min-width="120" align="center">
+            <template #default="scope">
+              <span v-if="scope.row.isParent">{{ scope.row.name }}</span>
+              <span v-else>{{ scope.row.parentName || '--' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="videoCount" label="视频数" width="90" align="center" />
           <el-table-column prop="tags" label="标签" min-width="180" align="center">
             <template #default="scope">
@@ -127,21 +142,18 @@
           </el-table-column>
           <el-table-column prop="sort" label="排序" width="100" align="center">
             <template #default="scope">
-              <el-input-number
-                v-model="scope.row.sort"
-                size="small"
-                :min="1"
-                :controls="true"
-                :step="1"
-                style="width: 70px;"
-                @change="onSortChange(scope.row)"
-              />
+              {{ scope.row.sort }}
             </template>
           </el-table-column>
           <el-table-column prop="status" label="状态" width="90" align="center">
             <template #default="scope">
               <el-tag v-if="scope.row.status" type="success">启用</el-tag>
               <el-tag v-else type="info">禁用</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="icon" label="图标文件名" width="140" align="center">
+            <template #default="scope">
+              {{ scope.row.icon || '--' }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="140" align="center" fixed="right">
@@ -178,6 +190,9 @@
         <el-form-item label="主分类名称" prop="name" required>
           <el-input v-model="editParentData.name" placeholder="请输入主分类名称" />
         </el-form-item>
+        <el-form-item label="图标" prop="icon">
+          <el-input v-model="editData.icon" placeholder="如 hot.svg" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="parentDialogVisible = false">取消</el-button>
@@ -206,6 +221,10 @@
         </el-form-item>
         <el-form-item label="子分类名称" prop="name" required>
           <el-input v-model="editData.name" placeholder="请输入子分类名称" />
+        </el-form-item>
+        <!-- 补充图标输入框 -->
+        <el-form-item label="图标" prop="icon">
+          <el-input v-model="editData.icon" placeholder="如 hot.svg" />
         </el-form-item>
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="editData.sort" :min="1" controls-position="right" style="width: 100%;" />
@@ -304,18 +323,17 @@ const isParentSelected = computed(() => {
 })
 
 function onTreeSelect(node: any) {
-  // 确保点击主分类或子分类时，currentTreeId 始终指向当前被选中的主分类ID
-  if (node.isParent) { // 如果是主分类节点
+  if (node.isParent) {
+    // 选中主分类，显示该主分类下所有子分类
     currentTreeId.value = node.id
-  } else if (node.parent_id) { // 如果是子分类节点
-    currentTreeId.value = node.parent_id // 选中其父分类
   } else {
-    currentTreeId.value = null; // 如果是根节点或其他情况，清空
+    // 选中子分类，只显示该子分类
+    currentTreeId.value = node.id
   }
 
-  const parentItem = parentCategories.value.find((p) => p.id === currentTreeId.value)
+  const parentItem = parentCategories.value.find((p) => p.id === (node.isParent ? node.id : node.parent_id))
   currentParentName.value = parentItem ? parentItem.name : '未选择主分类'
-  currentPage.value = 1 // 切换主分类时，重置子分类列表的页码
+  currentPage.value = 1
 }
 
 // ===================== 右侧筛选区和表格 =====================
@@ -329,22 +347,61 @@ const childCategoryOptions = computed<DarknetCategory[]>(() => {
 })
 
 
-const filteredChildCategories = computed<(DarknetCategory & { parentName: string })[]>(() => {
-  let list: DarknetCategory[] = [];
+const filteredChildCategories = computed(() => {
+  let list = [];
   if (currentTreeId.value === null) {
-    // 如果没有选中任何主分类，显示所有子分类
-    list = childCategories.value;
+    list = childCategories.value.map(row => ({
+      ...row,
+      parentName: parentCategories.value.find((p) => p.id === row.parent_id)?.name ?? '--',
+      sort: row.sort || 0,
+      status: Boolean(row.status),
+      isParent: false,
+      videoCount: row.videoCount || 0,
+      icon: row.icon ?? '' // 只用空字符串，不用 '--'
+    }));
   } else {
-    const isParent = parentCategories.value.some((c: DarknetCategory) => c.id === currentTreeId.value);
+    const isParent = parentCategories.value.some((c) => c.id === currentTreeId.value);
     if (isParent) {
-      // 如果 currentTreeId 是主分类ID，显示该主分类下的所有子分类
-      list = childCategories.value.filter((c: DarknetCategory) => c.parent_id === currentTreeId.value);
+      const main = parentCategories.value.find((p) => p.id === currentTreeId.value);
+      if (main) {
+        const totalVideoCount = childCategories.value
+          .filter((c) => c.parent_id === main.id)
+          .reduce((sum, c) => sum + (c.videoCount || 0), 0);
+        list.push({
+          ...main,
+          parentName: '--',
+          sort: main.sort || 0,
+          status: Boolean(main.status),
+          isParent: true,
+          videoCount: totalVideoCount,
+          icon: main.icon ?? '' // 只用空字符串，不用 '--'
+        });
+      }
+      list = list.concat(
+        childCategories.value
+          .filter((c) => c.parent_id === currentTreeId.value)
+          .map(row => ({
+            ...row,
+            parentName: main?.name ?? '--',
+            sort: row.sort || 0,
+            status: Boolean(row.status),
+            isParent: false,
+            videoCount: row.videoCount || 0,
+            icon: row.icon ?? '' // 只用空字符串，不用 '--'
+          }))
+      );
     } else {
-      // 如果 currentTreeId 是一个子分类ID (通过 node.isParent === false 判断为子节点点击)
-      // 则只显示这一个子分类，或者将其父分类选中并显示其下所有子分类 (根据你的实际需求调整)
-      // 目前的逻辑是：如果点击了子分类，currentTreeId 会被设置为其父ID
-      // 所以这里只需要处理 currentTreeId 是父ID的情况即可
-      list = childCategories.value.filter((c: DarknetCategory) => c.id === currentTreeId.value); // 如果 currentTreeId 是子分类ID
+      list = childCategories.value
+        .filter((c) => c.id === currentTreeId.value)
+        .map(row => ({
+          ...row,
+          parentName: parentCategories.value.find((p) => p.id === row.parent_id)?.name ?? '--',
+          sort: row.sort || 0,
+          status: Boolean(row.status),
+          isParent: false,
+          videoCount: row.videoCount || 0,
+          icon: row.icon ?? '' // 只用空字符串，不用 '--'
+        }));
     }
   }
 
@@ -359,16 +416,8 @@ const filteredChildCategories = computed<(DarknetCategory & { parentName: string
     );
   }
 
-  // 添加父分类名称，并确保sort字段存在且为数字，status为布尔值
-  return list.map((row: DarknetCategory) => ({
-    ...row,
-    parentName: parentCategories.value.find((p: DarknetCategory) => p.id === row.parent_id)?.name ?? '--',
-    sort: row.sort || 0,
-    status: Boolean(row.status)
-  }));
+  return list;
 });
-
-
 const pageSize = ref<number>(10)
 const currentPage = ref<number>(1)
 const pagedChildCategories = computed(() => {
@@ -409,7 +458,7 @@ async function onBatchDelete() {
 
 // ===================== 主分类弹窗 =====================
 const parentDialogVisible = ref<boolean>(false)
-const editParentData = ref<{ id: number | null; name: string }>({ id: null, name: '' })
+const editParentData = ref<{ id: number | null; name: string; icon: string }>({ id: null, name: '', icon: '' })
 const parentFormRef = ref<FormInstance>()
 
 function openMainDialog() {
@@ -456,7 +505,8 @@ const editData = ref<Omit<DarknetCategory, 'videoCount' | 'create_time' | 'updat
   parent_id: '',
   sort: 1,
   status: true,
-  tags: []
+  tags: [],
+  icon: ''
 })
 const childFormRef = ref<FormInstance>()
 
@@ -465,19 +515,32 @@ function openDialog() {
     ElMessage.warning('请先新建主分类');
     return;
   }
-  // 强制 parent_id 为数字类型
+  // 默认选中第一个主分类
+  const defaultParentId = Number(parentCategories.value[0].id);
+  // 找到当前主分类下所有子分类的最大排序值
+  const maxSort = Math.max(
+    0,
+    ...childCategories.value
+      .filter(c => c.parent_id === defaultParentId)
+      .map(c => Number(c.sort) || 0)
+  );
   editData.value = {
     id: null,
     name: '',
-    parent_id: Number(parentCategories.value[0].id), // 默认选中第一个主分类
-    sort: 1,
+    parent_id: defaultParentId,
+    sort: maxSort + 1, // 新建的子分类排序为最大值+1
     status: true,
     tags: []
   }
   dialogVisible.value = true
 }
 function onEdit(row: DarknetCategory) {
-  editData.value = { ...row, status: Boolean(row.status), parent_id: row.parent_id } // 确保 status 是布尔值，parent_id是number
+  editData.value = {
+    ...row,
+    status: Boolean(row.status),
+    parent_id: row.parent_id,
+    icon: row.icon || '' // 只用空字符串，不用 '--'
+  }
   dialogVisible.value = true
 }
 function onDialogClose() {
@@ -512,10 +575,8 @@ async function onSave() {
     let res;
     const submitData = { ...editData.value, status: editData.value.status ? 1 : 0, parent_id: Number(editData.value.parent_id) };
     if (submitData.id) {
-      // 编辑子分类
       res = await updateDarknetCategory(submitData as DarknetCategory);
     } else {
-      // 新建子分类
       res = await addChildCategory(submitData as Omit<DarknetCategory, 'id' | 'videoCount' | 'create_time' | 'update_time'>);
     }
 

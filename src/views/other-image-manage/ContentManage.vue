@@ -2,7 +2,7 @@
   <div class="content-manage">
     <div class="top-bar">
       <div class="tab-list">
-        <span class="tab-item active">内容管理</span>
+        <span class="tab-item active">OnlyFans内容管理</span>
       </div>
       <div class="status-indicator">
         <i class="el-icon-info"></i> 内容列表状态
@@ -12,19 +12,35 @@
     <div class="search-filter-area">
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="博主">
-          <el-select v-model="searchForm.influencerId" placeholder="全部博主" filterable clearable>
-            <el-option v-for="influencer in influencerOptions" :key="influencer.id" :label="influencer.nickname" :value="influencer.id"></el-option>
+          <el-select v-model="searchForm.creator_id" placeholder="全部博主" filterable clearable>
+            <el-option 
+              v-for="creator in creatorStore.creatorOptions" 
+              :key="creator.value" 
+              :label="creator.label" 
+              :value="creator.value"
+            ></el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="标签">
-          <el-select v-model="searchForm.tagId" placeholder="全部标签" clearable>
-            <el-option v-for="tag in store.tagOptions" :key="tag.id" :label="tag.name" :value="tag.id"></el-option>
+        <el-form-item label="分类">
+          <el-select v-model="searchForm.category_id" placeholder="全部分类" clearable>
+            <el-option 
+              v-for="category in categoryStore.categoryOptions" 
+              :key="category.value" 
+              :label="category.label" 
+              :value="category.value"
+            ></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="内容类型">
+          <el-select v-model="searchForm.media_type" placeholder="全部类型" clearable>
+            <el-option label="视频" value="video"></el-option>
+            <el-option label="图片集" value="image_set"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable>
-            <el-option label="正常" value="正常"></el-option>
-            <el-option label="禁用" value="禁用"></el-option>
+            <el-option label="正常" :value="1"></el-option>
+            <el-option label="禁用" :value="0"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -35,838 +51,1046 @@
     </div>
 
     <el-tabs v-model="activeTab" type="border-card" @tab-change="handleTabChange">
-      <el-tab-pane label="专辑列表" name="albums">
-        <div class="album-toolbar" style="margin-bottom: 15px;">
-          <el-button type="success" @click="handleAddAlbum">新增专辑</el-button>
-          <el-button type="danger" @click="handleBatchDeleteAlbums" :disabled="selectedAlbums.length === 0">批量删除</el-button>
-          <el-button @click="fetchAlbumList">刷新专辑列表</el-button>
-        </div>
-        <el-table
-          :data="albumList"
-          style="width: 100%"
-          border
-          @selection-change="handleAlbumSelectionChange"
-          v-loading="albumLoading"
-          :empty-text="albumEmptyText"
-        >
-          <el-table-column type="selection" width="55"></el-table-column>
-          <el-table-column prop="id" label="编号" width="80"></el-table-column>
-          <el-table-column label="封面" width="100">
-            <template #default="scope">
-              <img v-if="scope.row.cover" :src="scope.row.cover" alt="封面" class="content-cover" />
-              <span v-else>无封面</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="title" label="专辑名" width="180"></el-table-column>
-          <el-table-column label="所属博主" width="150">
-            <template #default="scope">
-              {{ getInfluencerNickname(scope.row.influencer_id) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="video_count" label="视频数" width="90"></el-table-column>
-          <el-table-column prop="intro" label="简介" show-overflow-tooltip></el-table-column>
-          <el-table-column prop="create_time" label="创建时间" width="180"></el-table-column>
-          <el-table-column label="操作" width="250">
-            <template #default="scope">
-              <el-button size="small" @click="handleEditAlbum(scope.row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="handleDeleteAlbum(scope.row.id)">删除</el-button>
-              <el-button size="small" @click="handleViewVideosInAlbum(scope.row)">查看视频</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="pagination-area">
-          <el-pagination
-            @size-change="handleAlbumSizeChange"
-            @current-change="handleAlbumCurrentChange"
-            :current-page="store.albumPagination.currentPage"
-            :page-sizes="[10, 20, 50]"
-            :page-size="store.albumPagination.pageSize"
-            layout="total, sizes, prev, pager, next, jumper"
-            :total="store.albumPagination.total"
-          ></el-pagination>
-        </div>
-      </el-tab-pane>
-
-      <el-tab-pane label="视频列表" name="videos">
-        <div class="video-toolbar" style="margin-bottom: 15px;">
-          <el-button type="success" @click="handleAddVideo">新增视频/图片</el-button>
+      <!-- 视频管理 -->
+      <el-tab-pane label="视频管理" name="videos">
+        <div class="content-toolbar" style="margin-bottom: 15px;">
+          <el-button type="success" @click="handleAddVideo">新增视频</el-button>
           <el-button type="danger" @click="handleBatchDeleteVideos" :disabled="selectedVideos.length === 0">批量删除</el-button>
-          <el-button @click="fetchVideoList">刷新视频列表</el-button>
-          <el-button @click="handleBatchSetVIP" :disabled="selectedVideos.length === 0">批量设为VIP</el-button>
-          <el-button @click="handleBatchCancelVIP" :disabled="selectedVideos.length === 0">批量取消VIP</el-button>
-          <el-button @click="handleBatchSetCoin" :disabled="selectedVideos.length === 0">批量设置金币</el-button>
-          <el-button @click="handleBatchCancelCoin" :disabled="selectedVideos.length === 0">批量取消金币</el-button>
+          <el-button @click="handleBatchSetVIP('video')" :disabled="selectedVideos.length === 0">批量设为VIP</el-button>
+          <el-button @click="handleBatchCancelVIP('video')" :disabled="selectedVideos.length === 0">批量取消VIP</el-button>
+          <el-button @click="fetchVideoList">刷新列表</el-button>
         </div>
+        
         <el-table
-          :data="videoList"
+          :data="mediaStore.mediaList.filter(item => item.media_type === 'video')"
           style="width: 100%"
           border
           @selection-change="handleVideoSelectionChange"
-          v-loading="videoLoading"
-          :empty-text="videoEmptyText"
+          v-loading="mediaStore.loading"
+          :empty-text="'暂无视频数据'"
         >
           <el-table-column type="selection" width="55"></el-table-column>
           <el-table-column prop="id" label="编号" width="80"></el-table-column>
-          <el-table-column label="封面" width="100">
+          <el-table-column label="封面" width="120">
             <template #default="scope">
-              <img v-if="scope.row.cover" :src="scope.row.cover" alt="封面" class="content-cover" />
+              <img v-if="scope.row.cover_url" :src="scope.row.cover_url" alt="封面" class="content-cover" />
               <span v-else>无封面</span>
             </template>
           </el-table-column>
-          <el-table-column prop="title" label="标题" width="180"></el-table-column>
-          <el-table-column label="所属专辑" width="150">
-            <template #default="scope">
-              {{ getAlbumTitle(scope.row.album_id) }}
-            </template>
-          </el-table-column>
+          <el-table-column prop="title" label="视频标题" width="200"></el-table-column>
           <el-table-column label="所属博主" width="150">
             <template #default="scope">
-              {{ getInfluencerNickname(scope.row.influencer_id) }}
+              {{ getCreatorName(scope.row.creator_id) }}
             </template>
           </el-table-column>
-          <el-table-column label="标签" width="150">
+          <el-table-column label="时长" width="100">
             <template #default="scope">
-              <el-tag v-for="tagId in scope.row.tag_ids" :key="tagId" size="small" style="margin-right: 5px;">
-                {{ getTagName(tagId) }}
-              </el-tag>
+              {{ formatDuration(scope.row.duration) }}
             </template>
           </el-table-column>
-          <el-table-column label="类型" width="90">
-              <template #default="scope">
-                <el-tag :type="scope.row.video_url ? 'info' : 'primary'">
-                  {{ scope.row.video_url ? '视频' : '图片' }}
-                </el-tag>
-              </template>
-          </el-table-column>
-          <el-table-column label="状态" width="90">
+          <el-table-column label="文件大小" width="100">
             <template #default="scope">
-              <el-tag :type="scope.row.status === '正常' ? 'success' : 'danger'">
-                {{ scope.row.status }}
-              </el-tag>
+              {{ formatFileSize(scope.row.file_size) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="观看次数" width="100">
+            <template #default="scope">
+              {{ scope.row.view_count || 0 }}
             </template>
           </el-table-column>
           <el-table-column label="VIP" width="80">
             <template #default="scope">
-              <el-tag v-if="scope.row.is_vip" type="success">VIP</el-tag>
-              <span v-else>—</span>
+              <el-tag v-if="scope.row.is_vip" type="warning">VIP</el-tag>
+              <span v-else>普通</span>
             </template>
           </el-table-column>
           <el-table-column label="金币" width="80">
             <template #default="scope">
-              <el-tag v-if="scope.row.coin > 0" type="warning">{{ scope.row.coin }}</el-tag>
-              <span v-else>—</span>
+              <el-tag v-if="scope.row.coin > 0" type="success">{{ scope.row.coin }}</el-tag>
+              <span v-else>免费</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'">
+                {{ scope.row.status === 1 ? '正常' : '禁用' }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="create_time" label="创建时间" width="180"></el-table-column>
-          <el-table-column label="操作" width="250">
+          <el-table-column label="操作" width="300" fixed="right">
             <template #default="scope">
               <el-button size="small" @click="handleEditVideo(scope.row)">编辑</el-button>
+              <el-button size="small" type="primary" @click="handlePreviewVideo(scope.row)">预览</el-button>
               <el-button size="small" type="danger" @click="handleDeleteVideo(scope.row.id)">删除</el-button>
-              <el-button size="small" @click="handlePreviewVideo(scope.row)">预览</el-button>
             </template>
           </el-table-column>
         </el-table>
-        <div class="pagination-area">
-          <el-pagination
-            @size-change="handleVideoSizeChange"
-            @current-change="handleVideoCurrentChange"
-            :current-page="store.videoPagination.currentPage"
-            :page-sizes="[10, 20, 50]"
-            :page-size="store.videoPagination.pageSize"
-            layout="total, sizes, prev, pager, next, jumper"
-            :total="store.videoPagination.total"
-          ></el-pagination>
+      </el-tab-pane>
+
+      <!-- 图片集管理 -->
+      <el-tab-pane label="图片集管理" name="image_sets">
+        <div class="content-toolbar" style="margin-bottom: 15px;">
+          <el-button type="success" @click="handleAddImageSet">新增图片集</el-button>
+          <el-button type="danger" @click="handleBatchDeleteImageSets" :disabled="selectedImageSets.length === 0">批量删除</el-button>
+          <el-button @click="handleBatchSetVIP('image_set')" :disabled="selectedImageSets.length === 0">批量设为VIP</el-button>
+          <el-button @click="handleBatchCancelVIP('image_set')" :disabled="selectedImageSets.length === 0">批量取消VIP</el-button>
+          <el-button @click="fetchImageSetList">刷新列表</el-button>
         </div>
+        
+        <el-table
+          :data="mediaStore.mediaList.filter(item => item.media_type === 'image_set')"
+          style="width: 100%"
+          border
+          @selection-change="handleImageSetSelectionChange"
+          v-loading="mediaStore.loading"
+          :empty-text="'暂无图片集数据'"
+        >
+          <el-table-column type="selection" width="55"></el-table-column>
+          <el-table-column prop="id" label="编号" width="80"></el-table-column>
+          <el-table-column label="封面" width="120">
+            <template #default="scope">
+              <img v-if="scope.row.cover_url" :src="scope.row.cover_url" alt="封面" class="content-cover" />
+              <span v-else>无封面</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" label="图片集标题" width="200"></el-table-column>
+          <el-table-column label="所属博主" width="150">
+            <template #default="scope">
+              {{ getCreatorName(scope.row.creator_id) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="图片数量" width="100">
+            <template #default="scope">
+              <el-tag type="info">{{ scope.row.image_count || 0 }}张</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="总大小" width="100">
+            <template #default="scope">
+              {{ formatFileSize(scope.row.total_size) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="浏览次数" width="100">
+            <template #default="scope">
+              {{ scope.row.view_count || 0 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="VIP" width="80">
+            <template #default="scope">
+              <el-tag v-if="scope.row.is_vip" type="warning">VIP</el-tag>
+              <span v-else>普通</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="金币" width="80">
+            <template #default="scope">
+              <el-tag v-if="scope.row.coin > 0" type="success">{{ scope.row.coin }}</el-tag>
+              <span v-else>免费</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'">
+                {{ scope.row.status === 1 ? '正常' : '禁用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="create_time" label="创建时间" width="180"></el-table-column>
+          <el-table-column label="操作" width="350" fixed="right">
+            <template #default="scope">
+              <el-button size="small" @click="handleEditImageSet(scope.row)">编辑</el-button>
+              <el-button size="small" type="primary" @click="handleViewImages(scope.row)">查看图片</el-button>
+              <el-button size="small" type="info" @click="handleManageImages(scope.row)">管理图片</el-button>
+              <el-button size="small" type="danger" @click="handleDeleteImageSet(scope.row.id)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog
-      v-model="albumDialogVisible"
-      :title="albumDialogTitle"
-      width="40%"
-      destroy-on-close
-    >
-      <el-form :model="currentAlbum" ref="albumForm" :rules="albumFormRules" label-width="100px">
-        <el-form-item label="专辑名" prop="title">
-          <el-input v-model="currentAlbum.title"></el-input>
-        </el-form-item>
-        <el-form-item label="所属博主" prop="influencer_id">
-          <el-select v-model="currentAlbum.influencer_id" placeholder="请选择博主" filterable>
-            <el-option v-for="influencer in influencerOptions" :key="influencer.id" :label="influencer.nickname" :value="influencer.id"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="封面URL" prop="cover">
-          <el-input v-model="currentAlbum.cover"></el-input>
-        </el-form-item>
-        <el-form-item label="简介" prop="intro">
-          <el-input type="textarea" v-model="currentAlbum.intro"></el-input>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="albumDialogVisible = false">取 消</el-button>
-          <el-button type="primary" @click="submitAlbumForm">确 定</el-button>
-        </span>
-      </template>
-    </el-dialog>
+    <!-- 分页 -->
+    <div class="pagination-area">
+      <el-pagination
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+        :current-page="mediaStore.pagination.page"
+        :page-sizes="[10, 20, 50, 100]"
+        :page-size="mediaStore.pagination.page_size"
+        layout="total, sizes, prev, pager, next, jumper"
+        :total="mediaStore.pagination.total"
+      ></el-pagination>
+    </div>
 
+    <!-- 视频编辑弹窗 -->
     <el-dialog
       v-model="videoDialogVisible"
       :title="videoDialogTitle"
-      width="50%"
+      width="60%"
       destroy-on-close
     >
-      <el-form :model="currentVideo" ref="videoForm" :rules="videoFormRules" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="currentVideo.title"></el-input>
+      <el-form :model="currentVideo" ref="videoFormRef" :rules="videoFormRules" label-width="120px">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="视频标题" prop="title">
+              <el-input v-model="currentVideo.title"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="所属博主" prop="creator_id">
+              <el-select v-model="currentVideo.creator_id" placeholder="请选择博主" style="width: 100%">
+                <el-option 
+                  v-for="creator in creatorStore.creatorOptions" 
+                  :key="creator.value" 
+                  :label="creator.label" 
+                  :value="creator.value"
+                ></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="视频文件URL" prop="video_url">
+          <el-input v-model="currentVideo.video_url" placeholder="请输入视频文件URL"></el-input>
         </el-form-item>
-        <el-form-item label="所属博主" prop="influencer_id">
-          <el-select v-model="currentVideo.influencer_id" placeholder="请选择博主" filterable @change="handleVideoInfluencerChange">
-            <el-option v-for="influencer in influencerOptions" :key="influencer.id" :label="influencer.nickname" :value="influencer.id"></el-option>
-          </el-select>
+
+        <el-form-item label="封面图URL" prop="cover_url">
+          <el-input v-model="currentVideo.cover_url" placeholder="请输入封面图URL"></el-input>
         </el-form-item>
-        <el-form-item label="所属专辑" prop="album_id">
-          <el-select v-model="currentVideo.album_id" placeholder="请选择专辑" filterable clearable :disabled="!currentVideo.influencer_id">
-            <el-option v-for="album in filteredAlbumOptions" :key="album.id" :label="album.title" :value="album.id"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="内容类型" prop="type">
-          <el-radio-group v-model="currentVideo.type">
-            <el-radio label="video">视频</el-radio>
-            <el-radio label="image">图片</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="封面URL" prop="cover">
-          <el-input v-model="currentVideo.cover"></el-input>
-        </el-form-item>
-        <el-form-item v-if="currentVideo.type === 'video'" label="视频地址" prop="video_url">
-          <el-input v-model="currentVideo.video_url"></el-input>
-        </el-form-item>
-        <el-form-item label="标签" prop="tag_ids">
-          <el-select v-model="currentVideo.tag_ids" multiple placeholder="请选择标签">
-            <el-option v-for="tag in store.tagOptions" :key="tag.id" :label="tag.name" :value="tag.id"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="状态" prop="status">
-          <el-radio-group v-model="currentVideo.status">
-            <el-radio label="正常"></el-radio>
-            <el-radio label="禁用"></el-radio>
-          </el-radio-group>
+
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="时长(秒)" prop="duration">
+              <el-input-number v-model="currentVideo.duration" :min="0" style="width: 100%"></el-input-number>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="文件大小(MB)" prop="file_size">
+              <el-input-number v-model="currentVideo.file_size" :min="0" :precision="2" style="width: 100%"></el-input-number>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="金币" prop="coin">
+              <el-input-number v-model="currentVideo.coin" :min="0" style="width: 100%"></el-input-number>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="VIP内容" prop="is_vip">
+              <el-switch v-model="currentVideo.is_vip" :active-value="1" :inactive-value="0"></el-switch>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="状态" prop="status">
+              <el-radio-group v-model="currentVideo.status">
+                <el-radio :label="1">正常</el-radio>
+                <el-radio :label="0">禁用</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="描述" prop="description">
+          <el-input type="textarea" v-model="currentVideo.description" :rows="3"></el-input>
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="videoDialogVisible = false">取 消</el-button>
-          <el-button type="primary" @click="submitVideoForm">确 定</el-button>
+          <el-button @click="videoDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitVideoForm" :loading="mediaStore.loading">确定</el-button>
         </span>
       </template>
     </el-dialog>
 
+    <!-- 图片集编辑弹窗 -->
     <el-dialog
-      v-model:visible="previewDialogVisible"
-      :title="previewTitle"
-      width="60%"
+      v-model="imageSetDialogVisible"
+      :title="imageSetDialogTitle"
+      width="70%"
       destroy-on-close
     >
-      <div v-if="previewType === 'video'">
-        <video :src="previewUrl" controls autoplay style="width: 100%;"></video>
-      </div>
-      <div v-else-if="previewType === 'image'">
-        <img :src="previewUrl" alt="预览图片" style="max-width: 100%; height: auto; display: block; margin: 0 auto;">
-      </div>
-      <div v-else>
-        无法预览此内容类型。
+      <el-form :model="currentImageSet" ref="imageSetFormRef" :rules="imageSetFormRules" label-width="120px">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="图片集标题" prop="title">
+              <el-input v-model="currentImageSet.title"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="所属博主" prop="creator_id">
+              <el-select v-model="currentImageSet.creator_id" placeholder="请选择博主" style="width: 100%">
+                <el-option 
+                  v-for="creator in creatorStore.creatorOptions" 
+                  :key="creator.value" 
+                  :label="creator.label" 
+                  :value="creator.value"
+                ></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="封面图URL" prop="cover_url">
+          <el-input v-model="currentImageSet.cover_url" placeholder="请输入封面图URL"></el-input>
+        </el-form-item>
+
+        <!-- ✅ 新增：图片URL列表管理 -->
+        <el-form-item label="图片列表">
+          <div class="image-urls-container">
+            <div v-for="(imageUrl, index) in currentImageSet.image_urls" :key="index" class="image-url-item">
+              <el-input 
+                v-model="currentImageSet.image_urls[index]" 
+                :placeholder="`请输入第${index + 1}张图片URL`"
+                style="width: calc(100% - 80px); margin-right: 10px;"
+              ></el-input>
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="removeImageUrl(index)"
+                :disabled="currentImageSet.image_urls.length <= 1"
+              >删除</el-button>
+            </div>
+            <div class="add-image-url">
+              <el-button type="primary" size="small" @click="addImageUrl" icon="Plus">添加图片URL</el-button>
+              <span class="tip">* 至少需要添加一张图片</span>
+            </div>
+          </div>
+        </el-form-item>
+
+        <!-- ✅ 图片预览区域 -->
+        <el-form-item label="图片预览" v-if="currentImageSet.image_urls && currentImageSet.image_urls.some(url => url)">
+          <div class="image-preview-grid">
+            <div 
+              v-for="(imageUrl, index) in currentImageSet.image_urls" 
+              :key="index" 
+              class="preview-item"
+              v-show="imageUrl"
+            >
+              <img :src="imageUrl" :alt="`图片${index + 1}`" @error="handleImageError(index)" />
+              <div class="preview-overlay">
+                <span>图片 {{ index + 1 }}</span>
+              </div>
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="金币" prop="coin">
+              <el-input-number v-model="currentImageSet.coin" :min="0" style="width: 100%"></el-input-number>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="VIP内容" prop="is_vip">
+              <el-switch v-model="currentImageSet.is_vip" :active-value="1" :inactive-value="0"></el-switch>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="状态" prop="status">
+              <el-radio-group v-model="currentImageSet.status">
+                <el-radio :label="1">正常</el-radio>
+                <el-radio :label="0">禁用</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="描述" prop="description">
+          <el-input type="textarea" v-model="currentImageSet.description" :rows="3"></el-input>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="imageSetDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitImageSetForm" :loading="mediaStore.loading">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 图片管理弹窗 -->
+    <el-dialog
+      v-model="imageManageDialogVisible"
+      :title="imageManageDialogTitle"
+      width="90%"
+      destroy-on-close
+    >
+      <div class="image-manage-content">
+        <div class="image-upload-area" style="margin-bottom: 20px;">
+          <el-upload
+            ref="uploadRef"
+            :action="uploadUrl"
+            :headers="uploadHeaders"
+            :data="{ image_set_id: currentImageSetId }"
+            :on-success="handleUploadSuccess"
+            :on-error="handleUploadError"
+            :before-upload="beforeUpload"
+            multiple
+            :file-list="[]"
+            list-type="picture-card"
+          >
+            <el-icon><Plus /></el-icon>
+            <template #tip>
+              <div class="el-upload__tip">
+                支持 jpg/png 格式，单个文件不超过 10MB，可批量上传
+              </div>
+            </template>
+          </el-upload>
+        </div>
+
+        <div class="image-list" v-if="currentImageSetImages.length > 0">
+          <el-row :gutter="16">
+            <el-col :span="6" v-for="(image, index) in currentImageSetImages" :key="image.id">
+              <div class="image-item">
+                <div class="image-preview">
+                  <img :src="image.url" :alt="image.name" @click="previewImage(image)" />
+                  <div class="image-overlay">
+                    <el-button size="small" @click="previewImage(image)">预览</el-button>
+                    <el-button size="small" type="danger" @click="deleteImage(image.id)">删除</el-button>
+                  </div>
+                </div>
+                <div class="image-info">
+                  <p>{{ image.name }}</p>
+                  <p>{{ formatFileSize(image.size) }}</p>
+                </div>
+              </div>
+            </el-col>
+          </el-row>
+        </div>
+        <div v-else class="empty-images">
+          <el-empty description="暂无图片，请上传图片"></el-empty>
+        </div>
       </div>
     </el-dialog>
 
+    <!-- 图片预览弹窗 -->
+    <el-dialog
+      v-model="imagePreviewDialogVisible"
+      title="图片预览"
+      width="80%"
+      destroy-on-close
+    >
+      <div class="image-preview-content" v-if="currentPreviewImage">
+        <img :src="currentPreviewImage.url" :alt="currentPreviewImage.name" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+      </div>
+    </el-dialog>
+
+    <!-- 视频预览弹窗 -->
+    <el-dialog
+      v-model="videoPreviewDialogVisible"
+      title="视频预览"
+      width="80%"
+      destroy-on-close
+    >
+      <div class="video-preview-content" v-if="currentPreviewVideo">
+        <video :src="currentPreviewVideo.video_url" controls style="width: 100%; height: auto;" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
-<script>
-import { defineComponent, reactive, toRefs, onMounted, watch, ref, nextTick, toRef } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { useContentStore } from '@/store/content.store';
-import { useRoute, useRouter } from 'vue-router';
+<script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { ElMessage, ElMessageBox, ElUpload } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import { useOnlyfansMediaStore } from '@/store/modules/onlyfansMedia'
+import { useOnlyfansCreatorStore } from '@/store/modules/onlyfansCreator'
+import { useOnlyfansCategoryStore } from '@/store/modules/onlyfansCategory'
 
-export default defineComponent({
-  name: 'ContentManage',
-  setup() {
-    const store = useContentStore();
-    const route = useRoute();
-    const router = useRouter();
-    const state = reactive({
-      activeTab: 'albums',
-      searchForm: {
-        influencerId: null,
-        albumId: null,
-        tagId: null,
-        status: null,
-        type: null,
-      },
-      albumList: [],
-      selectedAlbums: [],
-      albumLoading: false,
-      albumEmptyText: '暂无数据',
+// Store 实例
+const mediaStore = useOnlyfansMediaStore()
+const creatorStore = useOnlyfansCreatorStore()
+const categoryStore = useOnlyfansCategoryStore()
 
-      videoList: [],
-      selectedVideos: [],
-      videoLoading: false,
-      videoEmptyText: '暂无数据',
+// 响应式数据
+const activeTab = ref('videos')
+const searchForm = ref({
+  creator_id: undefined as number | undefined,
+  category_id: undefined as number | undefined,
+  media_type: undefined as string | undefined,
+  status: undefined as number | undefined
+})
 
-      albumDialogVisible: false,
-      albumDialogTitle: '',
-      currentAlbum: {
-        id: null, influencer_id: null, cover: '', title: '', intro: '', create_time: '', video_count: 0,
-      },
-      albumFormRules: {
-        title: [{ required: true, message: '请输入专辑名', trigger: 'blur' }],
-        influencer_id: [{ required: true, message: '请选择所属博主', trigger: 'change' }],
-        cover: [{ required: true, message: '请输入封面URL', trigger: 'blur' }],
-      },
+// 选中项
+const selectedVideos = ref([])
+const selectedImageSets = ref([])
 
-      videoDialogVisible: false,
-      videoDialogTitle: '',
-      currentVideo: {
-        id: null, album_id: null, influencer_id: null, title: '', cover: '', video_url: '', tag_ids: [], status: '正常', create_time: '', type: 'video'
-      },
-      videoFormRules: {
-        title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-        influencer_id: [{ required: true, message: '请选择所属博主', trigger: 'change' }],
-        cover: [{ required: true, message: '请输入封面URL', trigger: 'blur' }],
-        video_url: [{ required: true, message: '请输入视频地址', trigger: 'blur', trigger: 'change', validator: (rule, value, callback) => {
-          if (state.currentVideo.type === 'video' && !value) {
-            callback(new Error('请输入视频地址'));
-          } else {
-            callback();
-          }
-        }}],
-        type: [{ required: true, message: '请选择内容类型', trigger: 'change' }],
-        status: [{ required: true, message: '请选择状态', trigger: 'change' }],
-      },
-      
-      previewDialogVisible: false,
-      previewTitle: '',
-      previewUrl: '',
-      previewType: '',
+// 弹窗控制
+const videoDialogVisible = ref(false)
+const videoDialogTitle = ref('')
+const imageSetDialogVisible = ref(false)
+const imageSetDialogTitle = ref('')
+const imageManageDialogVisible = ref(false)
+const imageManageDialogTitle = ref('')
+const imagePreviewDialogVisible = ref(false)
+const videoPreviewDialogVisible = ref(false)
 
-      influencerOptions: [],
-      albumOptions: [],
-      filteredAlbumOptions: [],
-    });
+// 表单数据
+const currentVideo = ref({
+  id: undefined,
+  title: '',
+  creator_id: undefined,
+  video_url: '',
+  cover_url: '',
+  duration: 0,
+  file_size: 0,
+  coin: 0,
+  is_vip: 0,
+  status: 1,
+  description: '',
+  media_type: 'video'
+})
 
-    const albumForm = ref(null);
-    const videoForm = ref(null);
-    const videoFormReady = ref(false);
+const currentImageSet = ref({
+  id: undefined,
+  title: '',
+  creator_id: undefined,
+  cover_url: '',
+  image_urls: [''], // 图片URL数组
+  coin: 0,
+  is_vip: 0,
+  status: 1,
+  description: '',
+  media_type: 'image_set'
+})
 
-    const getInfluencerNickname = (id) => {
-      const item = state.influencerOptions.find(opt => opt.id === id)
-      return item ? item.nickname : ''
+// 图片管理相关
+const currentImageSetId = ref(null)
+const currentImageSetImages = ref([])
+const currentPreviewImage = ref(null)
+const currentPreviewVideo = ref(null)
+
+// 上传配置
+const uploadUrl = '/api/upload/images'
+const uploadHeaders = { Authorization: `Bearer ${localStorage.getItem('token')}` }
+
+// 表单验证规则
+const videoFormRules = {
+  title: [{ required: true, message: '请输入视频标题', trigger: 'blur' }],
+  creator_id: [{ required: true, message: '请选择博主', trigger: 'change' }],
+  video_url: [{ required: true, message: '请输入视频URL', trigger: 'blur' }],
+  status: [{ required: true, message: '请选择状态', trigger: 'change' }]
+}
+
+const imageSetFormRules = {
+  title: [{ required: true, message: '请输入图片集标题', trigger: 'blur' }],
+  creator_id: [{ required: true, message: '请选择博主', trigger: 'change' }],
+  status: [{ required: true, message: '请选择状态', trigger: 'change' }]
+}
+
+// 表单引用
+const videoFormRef = ref()
+const imageSetFormRef = ref()
+const uploadRef = ref()
+
+// ✅ 图片URL管理方法
+const addImageUrl = () => {
+  currentImageSet.value.image_urls.push('')
+}
+
+const removeImageUrl = (index: number) => {
+  if (currentImageSet.value.image_urls.length > 1) {
+    currentImageSet.value.image_urls.splice(index, 1)
+  }
+}
+
+const handleImageError = (index: number) => {
+  ElMessage.warning(`第${index + 1}张图片加载失败，请检查URL是否正确`)
+}
+
+// 获取博主名称
+const getCreatorName = (creatorId: number) => {
+  const creator = creatorStore.creatorOptions.find(c => c.value === creatorId)
+  return creator?.label || '未知博主'
+}
+
+// 格式化时长
+const formatDuration = (seconds: number) => {
+  if (!seconds) return '00:00'
+  const min = Math.floor(seconds / 60)
+  const sec = seconds % 60
+  return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
+}
+
+// 格式化文件大小
+const formatFileSize = (size: number) => {
+  if (!size) return '0B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let index = 0
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024
+    index++
+  }
+  return `${size.toFixed(2)}${units[index]}`
+}
+
+// 搜索和重置
+const handleSearch = () => {
+  mediaStore.setPagination(1)
+  fetchDataForActiveTab()
+}
+
+const resetSearch = () => {
+  searchForm.value = {
+    creator_id: undefined,
+    category_id: undefined,
+    media_type: undefined,
+    status: undefined
+  }
+  handleSearch()
+}
+
+// Tab切换
+const handleTabChange = () => {
+  fetchDataForActiveTab()
+}
+
+// 获取数据
+const fetchDataForActiveTab = () => {
+  const params = { ...searchForm.value }
+  if (activeTab.value === 'videos') {
+    params.media_type = 'video'
+  } else if (activeTab.value === 'image_sets') {
+    params.media_type = 'image_set'
+  }
+  mediaStore.fetchMediaList(params)
+}
+
+const fetchVideoList = () => {
+  mediaStore.fetchMediaList({ ...searchForm.value, media_type: 'video' })
+}
+
+const fetchImageSetList = () => {
+  mediaStore.fetchMediaList({ ...searchForm.value, media_type: 'image_set' })
+}
+
+// 选择变化
+const handleVideoSelectionChange = (selection: any[]) => {
+  selectedVideos.value = selection
+}
+
+const handleImageSetSelectionChange = (selection: any[]) => {
+  selectedImageSets.value = selection
+}
+
+// 视频相关操作
+const handleAddVideo = () => {
+  videoDialogTitle.value = '新增视频'
+  currentVideo.value = {
+    id: undefined,
+    title: '',
+    creator_id: undefined,
+    video_url: '',
+    cover_url: '',
+    duration: 0,
+    file_size: 0,
+    coin: 0,
+    is_vip: 0,
+    status: 1,
+    description: '',
+    media_type: 'video'
+  }
+  videoDialogVisible.value = true
+}
+
+const handleEditVideo = (row: any) => {
+  videoDialogTitle.value = '编辑视频'
+  currentVideo.value = { ...row }
+  videoDialogVisible.value = true
+}
+
+const submitVideoForm = () => {
+  videoFormRef.value?.validate(async (valid: boolean) => {
+    if (valid) {
+      try {
+        if (currentVideo.value.id) {
+          await mediaStore.updateMedia(currentVideo.value)
+          ElMessage.success('视频更新成功！')
+        } else {
+          await mediaStore.addMedia(currentVideo.value)
+          ElMessage.success('视频新增成功！')
+        }
+        videoDialogVisible.value = false
+        fetchVideoList()
+      } catch (error: any) {
+        ElMessage.error('操作失败：' + (error.message || '未知错误'))
+      }
+    } else {
+      ElMessage.error('请检查表单填写是否完整和正确！')
     }
+  })
+}
 
-    const getAlbumTitle = (id) => {
-      const album = state.albumOptions.find(a => a.id === id);
-      return album ? album.title : '无专辑';
-    };
+const handleDeleteVideo = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('此操作将永久删除该视频, 是否继续?', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await mediaStore.deleteMedia(id)
+    ElMessage.success('视频删除成功!')
+    fetchVideoList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败：' + (error.message || '未知错误'))
+    }
+  }
+}
 
-    const getTagName = (id) => {
-      const tag = store.tagOptions.find(t => t.id === id);
-      return tag ? tag.name : '未知标签';
-    };
+const handleBatchDeleteVideos = async () => {
+  if (selectedVideos.value.length === 0) {
+    ElMessage.warning('请至少选择一个视频进行删除！')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm('此操作将永久删除选中的视频, 是否继续?', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    const ids = selectedVideos.value.map((item: any) => item.id)
+    await mediaStore.batchDeleteMedia(ids)
+    ElMessage.success('批量删除成功!')
+    selectedVideos.value = []
+    fetchVideoList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败：' + (error.message || '未知错误'))
+    }
+  }
+}
 
-    const initOptions = async () => {
-      state.influencerOptions = await store.getInfluencerOptions();
-      state.albumOptions = await store.getAlbumOptions();
-      await store.getTagOptions();
-      // 加log
-      console.log('initOptions后 store.tagOptions:', store.tagOptions);
-    };
+const handlePreviewVideo = (row: any) => {
+  currentPreviewVideo.value = row
+  videoPreviewDialogVisible.value = true
+}
 
-    const handleTabChange = () => {
-      resetSearch();
-      fetchDataForActiveTab();
-    };
+// 图片集相关操作
+const handleAddImageSet = () => {
+  imageSetDialogTitle.value = '新增图片集'
+  currentImageSet.value = {
+    id: undefined,
+    title: '',
+    creator_id: undefined,
+    cover_url: '',
+    image_urls: [''], // 重置为默认一个空URL
+    coin: 0,
+    is_vip: 0,
+    status: 1,
+    description: '',
+    media_type: 'image_set'
+  }
+  imageSetDialogVisible.value = true
+}
 
-    const fetchDataForActiveTab = () => {
-      if (state.activeTab === 'albums') {
-        fetchAlbumList();
-      } else if (state.activeTab === 'videos') {
-        fetchVideoList();
-      }
-    };
-
-    const handleSearch = () => {
-      if (state.activeTab === 'albums') {
-        store.albumPagination.currentPage = 1;
-        fetchAlbumList();
-      } else if (state.activeTab === 'videos') {
-        store.videoPagination.currentPage = 1;
-        fetchVideoList();
-      }
-    };
-
-    const resetSearch = () => {
-      state.searchForm = {
-        influencerId: null,
-        albumId: null,
-        tagId: null,
-        status: null,
-        type: null,
-      };
-      if (state.activeTab === 'videos') {
-        state.filteredAlbumOptions = [];
-      }
-      fetchDataForActiveTab();
-    };
-
-    const fetchAlbumList = async () => {
-      state.albumLoading = true;
-      state.albumEmptyText = '加载中...';
-      try {
-        const params = {
-          currentPage: store.albumPagination.currentPage,
-          pageSize: store.albumPagination.pageSize,
-          influencer_id: state.searchForm.influencerId,
-        };
-        const res = await store.getAlbumList(params); // 只用store返回的
-        state.albumList = res.list;
-        store.albumPagination.total = res.total;
-        if (res.list.length === 0) {
-          state.albumEmptyText = '暂无数据';
-          ElMessage.error('专辑列表数据异常！');
-        } else {
-          ElMessage.success('专辑列表获取成功！');
-        }
-      } catch (error) {
-        state.albumList = [];
-        store.albumPagination.total = 1;
-        state.albumEmptyText = '暂无数据';
-        ElMessage.error('获取专辑列表失败，请稍后再试！');
-      } finally {
-        state.albumLoading = false;
-      }
-    };
-
-    const handleAlbumSelectionChange = (selection) => {
-      state.selectedAlbums = selection;
-    };
-
-    const handleAlbumSizeChange = (val) => {
-      store.albumPagination.pageSize = val;
-      store.albumPagination.currentPage = 1;
-      fetchAlbumList();
-    };
-
-    const handleAlbumCurrentChange = (val) => {
-      store.albumPagination.currentPage = val;
-      fetchAlbumList();
-    };
-
-    const handleAddAlbum = () => {
-      state.albumDialogTitle = '新增专辑';
-      state.currentAlbum = {
-        id: null, influencer_id: null, cover: '', title: '', intro: '', video_count: 0,
-      };
-      state.albumDialogVisible = true;
-      nextTick(() => {
-        if (albumForm.value) {
-          albumForm.value.clearValidate();
-        }
-      });
-    };
-
-    const handleEditAlbum = (row) => {
-      state.albumDialogTitle = '编辑专辑';
-      state.currentAlbum = { ...row };
-      state.albumDialogVisible = true;
-      nextTick(() => {
-        if (albumForm.value) {
-          albumForm.value.clearValidate();
-        }
-      });
-    };
-
-    const submitAlbumForm = () => {
-      albumForm.value.validate(async (valid) => {
-        if (valid) {
-          try {
-            if (state.currentAlbum.id) {
-              await ElMessageBox.confirm('确定保存对该专辑的修改吗？', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-              await store.updateAlbum(state.currentAlbum.id, state.currentAlbum);
-              ElMessage.success('专辑信息更新成功！');
-            } else {
-              await ElMessageBox.confirm('确定新增该专辑吗？', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-              await store.createAlbum(state.currentAlbum);
-              ElMessage.success('专辑新增成功！');
-            }
-            state.albumDialogVisible = false;
-            fetchAlbumList();
-            initOptions(); // 刷新专辑选项
-          } catch (error) {
-            console.error('提交专辑表单失败:', error);
-            ElMessage.error('操作失败，请稍后再试！');
-          }
-        } else {
-          ElMessage.error('请检查表单填写是否完整和正确！');
-        }
-      });
-    };
-
-    const handleDeleteAlbum = async (id) => {
-      try {
-        await ElMessageBox.confirm('此操作将永久删除该专辑, 是否继续?', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-        await store.removeAlbum(id);
-        ElMessage.success('专辑删除成功!');
-        fetchAlbumList();
-        fetchVideoList();
-        initOptions(); // 刷新专辑选项
-      } catch (error) {
-        console.error('删除专辑失败:', error);
-        if (error !== 'cancel') ElMessage.error('删除失败，请稍后再试！');
-      }
-    };
-
-    const handleBatchDeleteAlbums = async () => {
-      if (state.selectedAlbums.length === 0) { ElMessage.warning('请至少选择一个专辑进行删除！'); return; }
-      try {
-        await ElMessageBox.confirm('此操作将永久删除选中的专辑, 是否继续?', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-        const idsToDelete = state.selectedAlbums.map(item => item.id);
-        await store.batchRemoveAlbum(idsToDelete);
-        state.selectedAlbums = [];
-        ElMessage.success('批量删除成功!');
-        fetchAlbumList();
-        fetchVideoList();
-        initOptions(); // 刷新专辑选项
-      } catch (error) {
-        console.error('批量删除专辑失败:', error);
-        if (error !== 'cancel') ElMessage.error('批量删除失败，请稍后再试！');
-      }
-    };
+// ✅ 修正：只保留一个 handleEditImageSet 方法
+const handleEditImageSet = async (row: any) => {
+  imageSetDialogTitle.value = '编辑图片集'
+  
+  try {
+    // 尝试从 onlyfans_images 表获取图片URL列表
+    let imageUrls = ['']
     
-    const handleViewVideosInAlbum = (row) => {
-      state.searchForm.albumId = row.id;
-      state.searchForm.influencerId = row.influencer_id;
-      state.activeTab = 'videos';
-      nextTick(() => {
-        fetchVideoList();
-      });
-      ElMessage.info(`已切换到视频列表并筛选专辑：${row.title}`);
-    };
-
-    const fetchVideoList = async () => {
-      state.videoLoading = true;
-      state.videoEmptyText = '加载中...';
+    // 如果 mediaStore 有相关方法，则使用
+    if (mediaStore.getImagesByMediaId && typeof mediaStore.getImagesByMediaId === 'function') {
       try {
-        const params = {
-          currentPage: store.videoPagination.currentPage,
-          pageSize: store.videoPagination.pageSize,
-          influencer_id: state.searchForm.influencerId,
-          album_id: state.searchForm.albumId,
-          tag_id: state.searchForm.tagId,
-          status: state.searchForm.status,
-          type: state.searchForm.type,
-        };
-        const res = await store.getVideoList(params);
-        state.videoList = res.list;
-        store.videoPagination.total = res.total;
-        ElMessage.success('视频列表获取成功！');
+        const images = await mediaStore.getImagesByMediaId(row.id)
+        imageUrls = images.length > 0 ? images.map(img => img.url) : ['']
       } catch (error) {
-        console.error('获取视频列表失败:', error);
-        ElMessage.error('获取视频列表失败，请稍后再试！');
-        state.videoList = [];
-        store.videoPagination.total = 0;
-      } finally {
-        state.videoLoading = false;
-        if (state.videoList.length === 0) {
-            state.videoEmptyText = '暂无数据';
-        }
-      }
-    };
-
-    const handleVideoSelectionChange = (selection) => {
-      state.selectedVideos = selection;
-    };
-
-    const handleVideoSizeChange = (val) => {
-      store.videoPagination.pageSize = val;
-      store.videoPagination.currentPage = 1;
-      fetchVideoList();
-    };
-
-    const handleVideoCurrentChange = (val) => {
-      store.videoPagination.currentPage = val;
-      fetchVideoList();
-    };
-
-    const handleAddVideo = async () => {
-      state.videoDialogTitle = '新增视频/图片';
-      state.currentVideo = {
-        id: null, album_id: null, influencer_id: null, title: '', cover: '', video_url: '', tag_ids: [], status: '正常', type: 'video'
-      };
-      state.filteredAlbumOptions = [];
-      state.videoDialogVisible = true;
-      await initOptions(); // ← 关键：弹窗打开时刷新专辑选项
-      nextTick(() => {
-        if (videoForm.value) {
-          videoForm.value.clearValidate();
-        }
-      });
-    };
-
-    const handleEditVideo = async (row) => {
-      state.videoDialogTitle = '编辑视频/图片';
-      state.currentVideo = { ...row };
-      state.currentVideo.type = row.video_url ? 'video' : 'image';
-      await initOptions(); // ← 关键：弹窗打开时刷新专辑选项
-      handleVideoInfluencerChange(state.currentVideo.influencer_id);
-
-      state.videoDialogVisible = true;
-      videoFormReady.value = false;
-      nextTick(() => {
-        videoFormReady.value = true;
-        if (videoForm.value) {
-          videoForm.value.clearValidate();
-        }
-      });
-    };
-
-    const handleVideoInfluencerChange = (influencerId) => {
-      const albumOptions = Array.isArray(state.albumOptions) ? state.albumOptions : [];
-      console.log('albumOptions:', albumOptions, 'influencerId:', influencerId);
-      if (influencerId) {
-        state.filteredAlbumOptions = albumOptions.filter(
-          album => String(album.influencer_id) === String(influencerId)
-        );
-        console.log('filteredAlbumOptions:', state.filteredAlbumOptions);
-        if (
-          state.currentVideo.album_id &&
-          !state.filteredAlbumOptions.some(a => a.id === state.currentVideo.album_id)
-        ) {
-          state.currentVideo.album_id = null;
-        }
-      } else {
-        state.filteredAlbumOptions = [];
-        state.currentVideo.album_id = null;
-      }
-    };
-
-    const submitVideoForm = () => {
-      if (!videoForm.value) {
-        ElMessage.error('表单未渲染，请稍后重试！');
-        return;
-      }
-      videoForm.value.validate(async (valid) => {
-        if (valid) {
-          if (state.currentVideo.type === 'image') {
-            state.currentVideo.video_url = '';
-          }
-          try {
-            if (state.currentVideo.id) {
-              await ElMessageBox.confirm('确定保存对该内容的修改吗？', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-              await store.updateVideo(state.currentVideo); // 只传对象，包含 id
-              ElMessage.success('内容信息更新成功！');
-            } else {
-              await ElMessageBox.confirm('确定新增该内容吗？', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-              await store.createVideo(state.currentVideo);
-              ElMessage.success('内容新增成功！');
+        console.log('从数据库获取图片失败，使用默认值:', error)
+        // 如果数据库获取失败，尝试从行数据解析
+        if (row.image_urls) {
+          if (typeof row.image_urls === 'string') {
+            try {
+              imageUrls = JSON.parse(row.image_urls)
+            } catch {
+              imageUrls = [row.image_urls]
             }
-            state.videoDialogVisible = false;
-            fetchVideoList();
-            initOptions();
-          } catch (error) {
-            console.error('提交视频表单失败:', error);
-            ElMessage.error('操作失败，请稍后再试！');
+          } else if (Array.isArray(row.image_urls)) {
+            imageUrls = row.image_urls
           }
-        } else {
-          ElMessage.error('请检查表单填写是否完整和正确！');
         }
-      });
-    };
+      }
+    } else {
+      // 如果没有相关方法，从行数据解析
+      if (row.image_urls) {
+        if (typeof row.image_urls === 'string') {
+          try {
+            imageUrls = JSON.parse(row.image_urls)
+          } catch {
+            imageUrls = [row.image_urls]
+          }
+        } else if (Array.isArray(row.image_urls)) {
+          imageUrls = row.image_urls
+        }
+      }
+    }
+    
+    currentImageSet.value = { 
+      ...row,
+      cover_url: row.cover_url || row.cover, // 兼容不同字段名
+      image_urls: imageUrls
+    }
+    imageSetDialogVisible.value = true
+  } catch (error: any) {
+    ElMessage.error('获取图片信息失败：' + (error.message || '未知错误'))
+    // 如果获取失败，使用默认值
+    currentImageSet.value = { 
+      ...row,
+      cover_url: row.cover_url || row.cover,
+      image_urls: ['']
+    }
+    imageSetDialogVisible.value = true
+  }
+}
 
-    const handleDeleteVideo = async (id) => {
+const submitImageSetForm = () => {
+  imageSetFormRef.value?.validate(async (valid: boolean) => {
+    if (valid) {
+      // 验证图片URL
+      const validImageUrls = currentImageSet.value.image_urls.filter(url => url.trim() !== '')
+      if (validImageUrls.length === 0) {
+        ElMessage.error('请至少添加一张图片URL！')
+        return
+      }
+      
       try {
-        await ElMessageBox.confirm('此操作将永久删除该内容, 是否继续?', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-        await store.removeVideo(id);
-        ElMessage.success('内容删除成功!');
-        fetchVideoList();
-        initOptions(); // 刷新专辑选项（可能影响专辑的视频数）
-      } catch (error) {
-        console.error('删除视频失败:', error);
-        if (error !== 'cancel') ElMessage.error('删除失败，请稍后再试！');
+        // 处理提交数据
+        const submitData = {
+          ...currentImageSet.value,
+          image_count: validImageUrls.length,
+          cover: currentImageSet.value.cover_url || validImageUrls[0], // 使用 cover 字段
+          type: 'image' // 确保类型正确
+        }
+        
+        let mediaId
+        if (currentImageSet.value.id) {
+          await mediaStore.updateMedia(submitData)
+          mediaId = currentImageSet.value.id
+          ElMessage.success('图片集更新成功！')
+        } else {
+          const result = await mediaStore.addMedia(submitData)
+          mediaId = result.id || result.data?.id // 兼容不同的返回格式
+          ElMessage.success('图片集新增成功！')
+        }
+        
+        // 如果有保存图片URL的方法，则调用
+        if (mediaId && mediaStore.saveImageUrls && typeof mediaStore.saveImageUrls === 'function') {
+          try {
+            await mediaStore.saveImageUrls(mediaId, validImageUrls)
+          } catch (error) {
+            console.warn('保存图片URL失败，但主数据已保存:', error)
+          }
+        }
+        
+        imageSetDialogVisible.value = false
+        fetchImageSetList()
+      } catch (error: any) {
+        ElMessage.error('操作失败：' + (error.message || '未知错误'))
       }
-    };
+    } else {
+      ElMessage.error('请检查表单填写是否完整和正确！')
+    }
+  })
+}
 
-    const handleBatchDeleteVideos = async () => {
-      if (state.selectedVideos.length === 0) { ElMessage.warning('请至少选择一个内容进行删除！'); return; }
-      try {
-        await ElMessageBox.confirm('此操作将永久删除选中的内容, 是否继续?', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' });
-        const idsToDelete = state.selectedVideos.map(item => item.id);
-        await store.batchRemoveVideo(idsToDelete);
-        state.selectedVideos = [];
-        ElMessage.success('批量删除成功!');
-        fetchVideoList();
-        initOptions(); // 刷新专辑选项（可能影响专辑的视频数）
-      } catch (error) {
-        console.error('批量删除视频失败:', error);
-        if (error !== 'cancel') ElMessage.error('批量删除失败，请稍后再试！');
+const handleDeleteImageSet = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('此操作将永久删除该图片集及其所有图片, 是否继续?', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await mediaStore.deleteMedia(id)
+    ElMessage.success('图片集删除成功!')
+    fetchImageSetList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败：' + (error.message || '未知错误'))
+    }
+  }
+}
+
+const handleBatchDeleteImageSets = async () => {
+  if (selectedImageSets.value.length === 0) {
+    ElMessage.warning('请至少选择一个图片集进行删除！')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm('此操作将永久删除选中的图片集及其所有图片, 是否继续?', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    const ids = selectedImageSets.value.map((item: any) => item.id)
+    await mediaStore.batchDeleteMedia(ids)
+    ElMessage.success('批量删除成功!')
+    selectedImageSets.value = []
+    fetchImageSetList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败：' + (error.message || '未知错误'))
+    }
+  }
+}
+
+const handleViewImages = (row: any) => {
+  // 查看图片集的所有图片（只读模式）
+  ElMessage.info(`查看图片集：${row.title}`)
+}
+
+const handleManageImages = async (row: any) => {
+  // 管理图片集中的图片（可增删改）
+  imageManageDialogTitle.value = `管理图片集：${row.title}`
+  currentImageSetId.value = row.id
+  
+  try {
+    // 获取图片集中的所有图片
+    if (mediaStore.getImagesByMediaId && typeof mediaStore.getImagesByMediaId === 'function') {
+      const images = await mediaStore.getImagesByMediaId(row.id)
+      currentImageSetImages.value = images || []
+    } else {
+      currentImageSetImages.value = []
+    }
+    imageManageDialogVisible.value = true
+  } catch (error: any) {
+    ElMessage.error('获取图片列表失败：' + (error.message || '未知错误'))
+    currentImageSetImages.value = []
+    imageManageDialogVisible.value = true
+  }
+}
+
+// 批量VIP操作
+const handleBatchSetVIP = async (type: string) => {
+  const selected = type === 'video' ? selectedVideos.value : selectedImageSets.value
+  if (selected.length === 0) {
+    ElMessage.warning('请至少选择一项进行操作！')
+    return
+  }
+  
+  try {
+    const ids = selected.map((item: any) => item.id)
+    await mediaStore.batchSetVip(ids, 1)
+    ElMessage.success('批量设为VIP成功！')
+    fetchDataForActiveTab()
+  } catch (error: any) {
+    ElMessage.error('操作失败：' + (error.message || '未知错误'))
+  }
+}
+
+const handleBatchCancelVIP = async (type: string) => {
+  const selected = type === 'video' ? selectedVideos.value : selectedImageSets.value
+  if (selected.length === 0) {
+    ElMessage.warning('请至少选择一项进行操作！')
+    return
+  }
+  
+  try {
+    const ids = selected.map((item: any) => item.id)
+    await mediaStore.batchSetVip(ids, 0)
+    ElMessage.success('批量取消VIP成功！')
+    fetchDataForActiveTab()
+  } catch (error: any) {
+    ElMessage.error('操作失败：' + (error.message || '未知错误'))
+  }
+}
+
+// 图片上传相关
+const beforeUpload = (file: File) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt10M = file.size / 1024 / 1024 < 10
+
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件!')
+    return false
+  }
+  if (!isLt10M) {
+    ElMessage.error('图片大小不能超过 10MB!')
+    return false
+  }
+  return true
+}
+
+const handleUploadSuccess = (response: any, file: File) => {
+  if (response.code === 0) {
+    ElMessage.success('图片上传成功!')
+    // 刷新图片列表
+    if (currentImageSetId.value) {
+      handleManageImages({ id: currentImageSetId.value })
+    }
+  } else {
+    ElMessage.error(response.msg || '上传失败')
+  }
+}
+
+const handleUploadError = (error: any) => {
+  ElMessage.error('上传失败：' + error.message)
+}
+
+const previewImage = (image: any) => {
+  currentPreviewImage.value = image
+  imagePreviewDialogVisible.value = true
+}
+
+const deleteImage = async (imageId: number) => {
+  try {
+    await ElMessageBox.confirm('确定删除这张图片吗？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    
+    if (mediaStore.deleteImage && typeof mediaStore.deleteImage === 'function') {
+      await mediaStore.deleteImage(imageId)
+      ElMessage.success('图片删除成功!')
+      // 刷新图片列表
+      if (currentImageSetId.value) {
+        handleManageImages({ id: currentImageSetId.value })
       }
-    };
+    } else {
+      ElMessage.warning('删除功能暂未实现')
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败：' + (error.message || '未知错误'))
+    }
+  }
+}
 
-    const handlePreviewVideo = (row) => {
-      state.previewTitle = row.title;
-      state.previewUrl = row.video_url || row.cover;
-      state.previewType = row.video_url ? 'video' : 'image';
-      state.previewDialogVisible = true;
-    };
+// 分页
+const handleSizeChange = (val: number) => {
+  mediaStore.setPagination(1, val)
+  fetchDataForActiveTab()
+}
 
-    const handleBatchSetVIP = async () => {
-      const ids = state.selectedVideos.map(item => item.id);
-      if (ids.length === 0) {
-        ElMessage.warning('请至少选择一个内容进行操作！');
-        return;
-      }
-      await store.batchSetVideoVIPAction({ ids, is_vip: true });
-      ElMessage.success('批量设为VIP成功！');
-      fetchVideoList();
-    };
+const handleCurrentChange = (val: number) => {
+  mediaStore.setPagination(val)
+  fetchDataForActiveTab()
+}
 
-    const handleBatchCancelVIP = async () => {
-      const ids = state.selectedVideos.map(item => item.id);
-      if (ids.length === 0) {
-        ElMessage.warning('请至少选择一个内容进行操作！');
-        return;
-      }
-      await store.batchSetVideoVIPAction({ ids, is_vip: false });
-      ElMessage.success('批量取消VIP成功！');
-      fetchVideoList();
-    };
-
-    const handleBatchSetCoin = async () => {
-      const coin = await promptCoinValue();
-      const ids = state.selectedVideos.map(item => item.id);
-      if (ids.length === 0) {
-        ElMessage.warning('请至少选择一个内容进行操作！');
-        return;
-      }
-      await store.batchSetVideoCoinAction({ ids, coin });
-      ElMessage.success('批量设置金币成功！');
-      fetchVideoList();
-    };
-
-    const handleBatchCancelCoin = async () => {
-      const ids = state.selectedVideos.map(item => item.id);
-      if (ids.length === 0) {
-        ElMessage.warning('请至少选择一个内容进行操作！');
-        return;
-      }
-      await store.batchSetVideoCoinAction({ ids, coin: 0 });
-      ElMessage.success('批量取消金币成功！');
-      fetchVideoList();
-    };
-
-    // 批量设置金币弹窗
-    const promptCoinValue = async () => {
-      try {
-        const { value } = await ElMessageBox.prompt('请输入金币数', '设置金币', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          inputPattern: /^[1-9]\d*$/,
-          inputErrorMessage: '请输入正整数',
-        });
-        return parseInt(value, 10);
-      } catch {
-        throw 'cancel';
-      }
-    };
-
-    onMounted(() => {
-      initOptions();
-      // 路由带参数时才赋值
-      if (route.query.influencerId) {
-        state.searchForm.influencerId = parseInt(route.query.influencerId);
-      }
-      if (route.query.albumId) {
-        state.searchForm.albumId = parseInt(route.query.albumId);
-        state.activeTab = 'videos';
-      }
-      fetchDataForActiveTab();
-    });
-
-    return {
-      store,
-      activeTab: toRef(state, 'activeTab'),
-      searchForm: toRef(state, 'searchForm'),
-      albumList: toRef(state, 'albumList'),
-      selectedAlbums: toRef(state, 'selectedAlbums'),
-      albumLoading: toRef(state, 'albumLoading'),
-      albumEmptyText: toRef(state, 'albumEmptyText'),
-
-      videoList: toRef(state, 'videoList'),
-      selectedVideos: toRef(state, 'selectedVideos'),
-      videoLoading: toRef(state, 'videoLoading'),
-      videoEmptyText: toRef(state, 'videoEmptyText'),
-
-      albumDialogVisible: toRef(state, 'albumDialogVisible'),
-      albumDialogTitle: toRef(state, 'albumDialogTitle'),
-      currentAlbum: toRef(state, 'currentAlbum'),
-      albumFormRules: toRef(state, 'albumFormRules'),
-
-      videoDialogVisible: toRef(state, 'videoDialogVisible'),
-      videoDialogTitle: toRef(state, 'videoDialogTitle'),
-      currentVideo: toRef(state, 'currentVideo'),
-      videoFormRules: toRef(state, 'videoFormRules'),
-
-      previewDialogVisible: toRef(state, 'previewDialogVisible'),
-      previewTitle: toRef(state, 'previewTitle'),
-      previewUrl: toRef(state, 'previewUrl'),
-      previewType: toRef(state, 'previewType'),
-
-      influencerOptions: toRef(state, 'influencerOptions'),
-      albumOptions: toRef(state, 'albumOptions'),
-      filteredAlbumOptions: toRef(state, 'filteredAlbumOptions'),
-
-      handleTabChange,
-      handleSearch,
-      resetSearch,
-      fetchAlbumList,
-      handleAlbumSelectionChange,
-      handleAlbumSizeChange,
-      handleAlbumCurrentChange,
-      handleAddAlbum,
-      handleEditAlbum,
-      submitAlbumForm,
-      handleDeleteAlbum,
-      handleBatchDeleteAlbums,
-      handleViewVideosInAlbum,
-      fetchVideoList,
-      handleVideoSelectionChange,
-      handleVideoSizeChange,
-      handleVideoCurrentChange,
-      handleAddVideo,
-      handleEditVideo,
-      handleVideoInfluencerChange,
-      submitVideoForm,
-      handleDeleteVideo,
-      handleBatchDeleteVideos,
-      handlePreviewVideo,
-      videoForm, // ← 这行必须加上！
-      albumForm,
-
-      getInfluencerNickname,
-      getAlbumTitle,
-      getTagName,
-
-      handleBatchSetVIP,
-      handleBatchCancelVIP,
-      handleBatchSetCoin,      // ← 加上
-      handleBatchCancelCoin,   // ← 加上
-    };
-  },
-});
+// 初始化
+onMounted(async () => {
+  try {
+    await Promise.all([
+      creatorStore.fetchCreatorList(),
+      categoryStore.fetchCategoryList()
+    ])
+    fetchDataForActiveTab()
+  } catch (error) {
+    console.error('初始化失败:', error)
+    ElMessage.error('页面初始化失败，请刷新重试')
+  }
+})
 </script>
 
 <style scoped>
 .content-manage {
   padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .top-bar {
@@ -874,42 +1098,202 @@ export default defineComponent({
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
 }
 
-.tab-list .tab-item {
-  font-size: 18px;
-  font-weight: bold;
-  padding-bottom: 5px;
-  border-bottom: 3px solid transparent;
+.tab-list {
+  display: flex;
+}
+
+.tab-item {
+  padding: 8px 15px;
   cursor: pointer;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  margin-right: 10px;
+  font-size: 14px;
+  color: #606266;
 }
 
-.tab-list .tab-item.active {
+.tab-item.active {
+  background-color: #409eff;
+  color: #fff;
   border-color: #409eff;
-  color: #409eff;
+}
+
+.status-indicator {
+  color: #67c23a;
+  font-size: 14px;
 }
 
 .search-filter-area {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
   margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.search-form .el-form-item {
+  margin-bottom: 0 !important;
+  margin-right: 15px;
 }
 
 .content-cover {
   width: 80px;
-  height: 80px;
+  height: 60px;
   object-fit: cover;
   border-radius: 4px;
 }
 
 .pagination-area {
   margin-top: 20px;
+  text-align: right;
+}
+
+.content-toolbar {
+  margin-bottom: 15px;
+}
+
+.image-manage-content {
+  min-height: 400px;
+}
+
+.image-upload-area {
+  border-bottom: 1px solid #ebeef5;
+  padding-bottom: 20px;
+}
+
+.image-list {
+  margin-top: 20px;
+}
+
+.image-item {
+  margin-bottom: 20px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.image-preview {
+  position: relative;
+  padding-bottom: 75%; /* 4:3 aspect ratio */
+  overflow: hidden;
+}
+
+.image-preview img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.image-preview:hover .image-overlay {
+  opacity: 1;
+}
+
+.image-overlay .el-button {
+  margin: 0 5px;
+}
+
+.image-info {
+  padding: 10px;
+  background-color: #f8f9fa;
+}
+
+.image-info p {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.empty-images {
+  text-align: center;
+  padding: 40px;
 }
 
 .dialog-footer {
   text-align: right;
+}
+
+.el-table th {
+  background-color: #fafafa !important;
+}
+
+.image-urls-container {
+  margin-top: 10px;
+}
+
+.image-url-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.add-image-url {
+  margin-top: 10px;
+}
+
+.tip {
+  font-size: 12px;
+  color: #999;
+  margin-left: 10px;
+}
+
+.image-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.preview-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.preview-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.preview-item:hover .preview-overlay {
+  opacity: 1;
 }
 </style>

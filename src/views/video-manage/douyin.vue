@@ -56,7 +56,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="onSearch" size="small">搜索</el-button>
+          <el-button type="primary" @click="() => onSearch()" size="small">搜索</el-button>
         </el-form-item>
         <el-form-item>
           <el-button @click="onReset" size="small">重置</el-button>
@@ -68,16 +68,28 @@
           <el-button type="warning" @click="onBatchVip" size="small" :disabled="selectedRows.length === 0">批量设置VIP</el-button>
         </el-form-item>
         <el-form-item>
+          <el-button type="danger" @click="onBatchUnVip" size="small" :disabled="selectedRows.length === 0">批量取消VIP</el-button>
+        </el-form-item>
+        <el-form-item>
           <el-button type="primary" @click="onBatchSortAsc" size="small" :disabled="selectedRows.length === 0">升序置顶</el-button>
         </el-form-item>
         <el-form-item>
-          <el-button type="info" @click="onBatchPreviewTime" size="small" :disabled="selectedRows.length === 0">批量设置试看时长</el-button>
+          <el-button type="danger" @click="onBatchPreviewTime" size="small" :disabled="selectedRows.length === 0">批量设置试看时长</el-button>
         </el-form-item>
         <el-form-item>
           <el-button type="danger" @click="onBatchDelete" size="small" :disabled="selectedRows.length === 0">批量删除</el-button>
         </el-form-item>
         <el-form-item>
           <el-button type="warning" @click="onBatchSetGold" size="small" :disabled="selectedRows.length === 0">批量设置金币</el-button>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="info" @click="onBatchSetLikes" size="small" :disabled="selectedRows.length === 0">批量设置点赞</el-button>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="info" @click="onBatchSetCollect" size="small" :disabled="selectedRows.length === 0">批量设置收藏</el-button>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="info" @click="onBatchSetPlay" size="small" :disabled="selectedRows.length === 0">批量设置播放数</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -137,9 +149,9 @@
         </el-table-column>
         <el-table-column prop="parentName" label="主分类" min-width="60" align="center" />
         <el-table-column prop="categoryName" label="子分类" min-width="70" align="center" />
-        <el-table-column prop="preview" label="试看" min-width="44" align="center">
+        <el-table-column prop="likes" label="点赞" min-width="44" align="center">
           <template #default="scope">
-            <el-tag type="info" size="small">{{ scope.row.preview }}</el-tag>
+            <el-tag type="info" size="small">{{ scope.row.likes || scope.row.like_count || '0' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="vip" label="VIP" min-width="35" align="center">
@@ -171,7 +183,7 @@
           </template>
         </el-table-column>
       </el-table>
-        <el-pagination
+      <el-pagination
         v-model:current-page="searchForm.page"
         v-model:page-size="searchForm.pageSize"
         :page-sizes="[10, 20, 50, 100]"
@@ -184,6 +196,7 @@
       />
     </el-card>
 
+    <!-- 添加视频弹窗 -->
     <el-dialog
       v-model="addDialogVisible"
       title="添加新视频"
@@ -242,9 +255,6 @@
         <el-form-item label="封面图地址">
           <el-input v-model="addForm.cover" placeholder="图片URL地址" clearable />
         </el-form-item>
-        <el-form-item label="试看时长">
-          <el-input v-model="addForm.preview" placeholder="如15秒、30秒" clearable />
-        </el-form-item>
         <el-form-item label="VIP">
           <el-switch v-model="addForm.vip" active-text="VIP" inactive-text="无" />
         </el-form-item>
@@ -258,6 +268,216 @@
       </el-form>
     </el-dialog>
 
+    <!-- 编辑视频弹窗 -->
+    <el-dialog
+      v-model="editDialogVisible"
+      title="编辑视频信息"
+      width="750px"
+      :close-on-click-modal="false"
+      @close="onEditDialogClose"
+      class="edit-dialog"
+    >
+      <el-form :model="editForm" label-width="90px" size="small" :rules="editFormRules" ref="editFormRef">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="视频标题" prop="title" required>
+              <el-input 
+                v-model="editForm.title" 
+                placeholder="请输入视频标题"
+                clearable 
+                maxlength="100"
+                show-word-limit
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="视频ID" disabled>
+              <el-input :value="editForm.id" disabled />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="主分类" prop="parent_id" required>
+              <el-select
+                v-model="editForm.parent_id"
+                placeholder="请选择主分类"
+                style="width:100%"
+                @change="onEditParentChange"
+              >
+                <el-option
+                  v-for="item in douyinCategoryParents"
+                  :key="item.id"
+                  :label="item.name"
+                  :value="item.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="子分类" prop="category_id" required>
+              <el-select 
+                v-model="editForm.category_id" 
+                placeholder="请先选择主分类"
+                style="width:100%"
+                :disabled="!editForm.parent_id"
+              >
+                <el-option
+                  v-for="item in editSubCategoryOptions"
+                  :key="item.id"
+                  :label="item.name"
+                  :value="item.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="视频标签">
+          <el-select
+            v-model="editForm.tags"
+            multiple
+            clearable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="请选择视频标签"
+            style="width:100%"
+            :max-collapse-tags="3"
+          >
+            <el-option
+              v-for="tag in douyinTags"
+              :key="tag.id"
+              :label="tag.name"
+              :value="tag.name"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="视频地址" prop="url" required>
+          <div style="display: flex; width: 100%; align-items: center; gap: 10px;">
+            <el-input 
+              v-model="editForm.url" 
+              placeholder="请输入或上传视频URL地址"
+              clearable 
+              style="flex: 1;"
+            />
+            <el-upload
+              class="upload-demo"
+              action="http://localhost:8000/api/upload/video"
+              :show-file-list="false"
+              :on-success="handleVideoUploadSuccess"
+              :on-error="handleUploadError"
+              :before-upload="beforeVideoUpload"
+              accept="video/mp4,video/webm,video/quicktime,application/x-mpegURL,application/octet-stream"
+            >
+              <el-button type="primary" size="small" icon="Upload">
+                <span>上传视频</span>
+              </el-button>
+            </el-upload>
+          </div>
+          <div style="font-size: 12px; color: #999; margin-top: 4px;">
+            支持格式：MP4、WEBM、MOV、M3U8，文件大小不超过500MB
+          </div>
+        </el-form-item>
+
+        <el-form-item label="封面图片">
+          <div style="display: flex; width: 100%; align-items: flex-start; gap: 10px;">
+            <div style="flex: 1;">
+              <el-input 
+                v-model="editForm.cover" 
+                placeholder="请输入或上传封面图片URL地址" 
+                clearable 
+                style="width: 100%;"
+              />
+              <div style="font-size: 12px; color: #999; margin-top: 4px;">
+                支持格式：JPG、PNG、GIF、WEBP，文件大小不超过5MB
+              </div>
+            </div>
+            <el-upload
+              class="upload-demo"
+              action="/api/upload/image"
+              :show-file-list="false"
+              :on-success="handleImageUploadSuccess"
+              :on-error="handleUploadError"
+              :before-upload="beforeImageUpload"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+            >
+              <el-button type="primary" size="small" icon="Upload">
+                <span>上传封面</span>
+              </el-button>
+            </el-upload>
+          </div>
+        </el-form-item>
+
+        <el-form-item label="封面预览" v-if="editForm.cover">
+          <div class="cover-preview">
+            <img 
+              :src="editForm.cover" 
+              style="max-width: 200px; max-height: 150px; border-radius: 8px; object-fit: cover; border: 1px solid #dcdfe6;"
+              @error="handleImageError"
+            />
+            <el-button 
+              size="small" 
+              type="danger" 
+              link 
+              @click="editForm.cover = ''"
+              style="margin-left: 10px; vertical-align: top;"
+            >
+              删除封面
+            </el-button>
+          </div>
+        </el-form-item>
+
+        <el-divider content-position="left">视频属性设置</el-divider>
+
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="点赞数量">
+              <el-input-number 
+                v-model="editForm.likes" 
+                :min="0" 
+                :max="999999999"
+                style="width: 100%"
+                controls-position="right"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="VIP专享">
+              <el-switch 
+                v-model="editForm.vip" 
+                active-text="VIP" 
+                inactive-text="普通"
+                active-color="#f56c6c"
+                inactive-color="#909399"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="金币数量">
+              <el-input-number 
+                v-model="editForm.coin" 
+                :min="0" 
+                :max="999999"
+                style="width: 100%"
+                controls-position="right"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item style="margin-top: 20px;">
+          <el-button type="primary" @click="submitEdit" :loading="submitLoading">
+            <span>保存修改</span>
+          </el-button>
+          <el-button @click="editDialogVisible = false">取消</el-button>
+          <el-button type="info" @click="resetEditForm" v-if="editForm.id">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-dialog>
+
+    <!-- 批量设置金币弹窗 -->
     <el-dialog v-model="batchGoldDialogVisible" title="批量设置金币" width="350px">
       <el-form>
         <el-form-item label="金币数量">
@@ -270,105 +490,62 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="editDialogVisible"
-      title="编辑视频"
-      width="700px"
-      @close="onEditDialogClose"
-    >
-      <el-form :model="editForm" label-width="82px" size="small">
-        <el-form-item label="标题" required>
-          <el-input v-model="editForm.title" clearable />
-        </el-form-item>
-        <el-form-item label="主分类" required>
-          <el-select
-            v-model="editForm.parent_id"
-            style="width:100%"
-            @change="onEditParentChange"
-          >
-            <el-option
-              v-for="item in douyinCategoryParents"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="子分类" required>
-          <el-select v-model="editForm.category_id" style="width:100%">
-            <el-option
-              v-for="item in editSubCategoryOptions"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-select
-            v-model="editForm.tags"
-            multiple
-            clearable
-            collapse-tags
-            style="width:100%"
-          >
-            <el-option
-              v-for="tag in douyinTags"
-              :key="tag.id"
-              :label="tag.name"
-              :value="tag.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="视频URL地址" required>
-          <div style="display: flex; width: 100%; align-items: center;">
-            <el-input v-model="editForm.url" clearable style="flex: 1; margin-right: 10px;" />
-            <el-upload
-              class="upload-demo"
-              action="http://localhost:8000/api/upload/video"
-              :show-file-list="false"
-              :on-success="handleVideoUploadSuccess"
-              :on-error="handleUploadError"
-              :before-upload="beforeVideoUpload"
-              accept="video/mp4,video/webm,video/quicktime,application/x-mpegURL,application/octet-stream"
-            >
-              <el-button type="primary" size="small">上传视频</el-button>
-            </el-upload>
-          </div>
-        </el-form-item>
-        <el-form-item label="封面图地址">
-          <div style="display: flex; width: 100%; align-items: center;">
-            <el-input v-model="editForm.cover" placeholder="图片URL地址" clearable style="flex: 1; margin-right: 10px;" />
-            <el-upload
-              class="upload-demo"
-              action="/api/upload/image"
-              :show-file-list="false"
-              :on-success="handleImageUploadSuccess"
-              :on-error="handleUploadError"
-              :before-upload="beforeImageUpload"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-            >
-              <el-button type="primary" size="small">上传封面</el-button>
-            </el-upload>
-          </div>
-        </el-form-item>
-        <el-form-item label="封面预览">
-          <img :src="editForm.cover" style="width:100px;border-radius:6px;" v-if="editForm.cover" />
-        </el-form-item>
-        <el-form-item label="试看时长">
-          <el-input v-model="editForm.preview" clearable />
-        </el-form-item>
-        <el-form-item label="VIP">
-          <el-switch v-model="editForm.vip" active-text="VIP" inactive-text="无" />
-        </el-form-item>
-        <el-form-item label="金币">
-          <el-input-number v-model="editForm.coin" :min="0" style="width: 120px" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="submitEdit">保存</el-button>
-          <el-button @click="editDialogVisible = false">取消</el-button>
+    <!-- 批量设置点赞弹窗 -->
+    <el-dialog v-model="batchLikesDialogVisible" title="批量设置点赞" width="350px">
+      <el-form>
+        <el-form-item label="点赞数量">
+          <el-input-number v-model="batchLikesValue" :min="0" style="width: 120px" />
         </el-form-item>
       </el-form>
+      <template #footer>
+        <el-button @click="batchLikesDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitBatchLikes">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量设置收藏弹窗 -->
+    <el-dialog v-model="batchCollectDialogVisible" title="批量设置收藏" width="350px">
+      <el-form>
+        <el-form-item label="收藏数量">
+          <el-input-number v-model="batchCollectValue" :min="0" style="width: 120px" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchCollectDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitBatchCollect">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量设置播放数弹窗 -->
+    <el-dialog v-model="batchPlayDialogVisible" title="批量设置播放数" width="350px">
+      <el-form>
+        <el-form-item label="播放数量">
+          <el-input-number v-model="batchPlayValue" :min="0" style="width: 120px" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchPlayDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitBatchPlay">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量设置试看时长弹窗 -->
+    <el-dialog v-model="batchPreviewDialogVisible" title="批量设置试看时长" width="350px">
+      <el-form>
+        <el-form-item label="试看时长">
+          <el-select v-model="batchPreviewValue" placeholder="请选择试看时长" style="width: 200px">
+            <el-option label="5秒" value="5秒" />
+            <el-option label="10秒" value="10秒" />
+            <el-option label="15秒" value="15秒" />
+            <el-option label="30秒" value="30秒" />
+            <el-option label="60秒" value="60秒" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchPreviewDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitBatchPreviewTime">确定</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -379,10 +556,10 @@ import { nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadProps } from 'element-plus'
 
-// 导入抖音分类 Store (用于主分类/子分类下拉框)
+// 导入抖音分类 Store
 import { douyinCategoryParents, douyinCategoryChildren, fetchCategoryList as fetchDouyinCategories } from '@/store/modules/douyin-category.store'
 
-// 导入抖音视频 Store (用于视频数据和操作)
+// 导入抖音视频 Store
 import {
   douyinVideos,
   douyinVideoTotal,
@@ -390,200 +567,100 @@ import {
   fetchVideoList,
   addVideo,
   updateVideo,
-  deleteVideo, // Keep this for single delete, as the batch delete is handled by batchDeleteVideos
+  deleteVideo,
   batchDeleteVideos,
   batchSetVip,
   batchSetDuration,
   batchSetGold,
   fetchVideoDetail,
-  batchSortAsc
+  batchSortAsc,
+  batchSetLikes,
+  batchSetCollect,
+  batchSetPlay
 } from '@/store/modules/douyin-video.store'
 
-
-// 导入抖音标签 Store (用于标签下拉框)
+// 导入抖音标签 Store
 import { douyinTags, fetchTagList as fetchDouyinTags } from '@/store/modules/douyin-tag.store'
 
-// 类型定义 (可以根据实际后端返回的字段调整)
+// ======================= 类型定义 =======================
 interface VideoRow {
   id: number
   title: string
   tags: string[]
-  parent_id: number // 对应主分类ID
-  category_id: number // 对应子分类ID
+  parent_id: number
+  category_id: number
   m3u8?: string
   cover?: string
-  preview: string // 试看时长
-  vip: boolean // 后端可能存 0/1，前端展示布尔
+  vip: boolean
   coin: number
-  status: string // 后端可能存 0/1，前端展示文字
+  status: string
   play: number
   collect: number
-  upload_time: string // 上传时间
-  // 其他可能字段：duration, like, comment_count 等
-  parentName?: string // 方便前端显示
-  categoryName?: string // 方便前端显示
-  url?: string; // 视频URL地址，优先使用 (此行是你原始代码中已存在的)
-  is_vip?: number; // 后端返回的 is_vip 字段
-  gold?: number; // 后端返回的 gold 字段
+  upload_time: string
+  parentName?: string
+  categoryName?: string
+  url?: string
+  is_vip?: number
+  gold?: number
+  likes: number
+  like_count?: number
 }
 
-// ======================= 初始化加载数据 =======================
-onMounted(() => {
-  // 同时加载视频列表、分类列表和标签列表
-  fetchVideoList(searchForm.value)
-  fetchDouyinCategories()
-  fetchDouyinTags()
-})
+interface SearchForm {
+  page: number
+  pageSize: number
+  keyword: string
+  parent_id: string
+  category_id: string
+  tags: number[]
+}
 
-// ===================== 筛选/搜索表单 =====================
-const searchForm = ref({
-  page: 1, // 当前页
-  pageSize: 10, // 每页数量
+interface VideoForm {
+  id?: number | null
+  title: string
+  parent_id: string
+  category_id: string
+  tags: string[]
+  url: string
+  cover: string
+  preview?: string
+  vip: boolean
+  coin: number
+  likes?: number  // 前端显示用，提交时会转换为 like_count
+}
+
+// ======================= 响应式数据 =======================
+// 搜索表单
+const searchForm = ref<SearchForm>({
+  page: 1,
+  pageSize: 10,
   keyword: '',
   parent_id: '',
   category_id: '',
-  tags: [] as number[] // Changed to number[] to match tag.id type if tags are stored by ID
+  tags: []
 })
 
-// 计算属性，用于子分类下拉框选项 (根据选中的主分类过滤)
-const subCategoryOptions = computed(() => {
-  if (!searchForm.value.parent_id) return douyinCategoryChildren.value // 如果没有选择主分类，显示所有子分类
-  return douyinCategoryChildren.value.filter(c => c.parent_id === Number(searchForm.value.parent_id))
-})
-
-// `allTags` 变为直接从 `douyinTags` Store 获取的标签名称数组
-// 这里假设 douyinTags 是 [{id: ..., name: '...'}] 的格式
-const allTags = computed(() => {
-  return douyinTags.value.map((tag: any) => tag.name)
-})
-
-// `tableData` 已移除，直接使用 `douyinVideos` (来自 Store)
-
-// ===================== 表格操作 =====================
+// 表格选中行
 const selectedRows = ref<VideoRow[]>([])
 
-function handleSelectionChange(rows: VideoRow[]) {
-  selectedRows.value = rows
-}
+// 标题 tooltip 控制
+const visibleTitleIndex = ref<number | null>(null)
 
-// 批量删除
-async function onBatchDelete() {
-  if (!selectedRows.value.length) {
-    return ElMessage.warning('请先勾选需要操作的视频');
-  }
-  await ElMessageBox.confirm('确定批量删除已选视频吗？', '警告', { type: 'warning' }).then(async () => {
-    const ids = selectedRows.value.map(v => v.id);
-    const res = await batchDeleteVideos(ids); // 调用 Store 函数，注意这里是 batchDeleteVideos
-    if (res && res.code === 0) { // 检查 code 属性
-      ElMessage.success('批量删除成功');
-      selectedRows.value = []; // 清空选中
-      fetchVideoList(searchForm.value); // 刷新列表
-    } else {
-      ElMessage.error(res?.msg || '批量删除失败'); // 错误消息来自后端或兜底
-    }
-  }).catch(() => {
-    ElMessage.info('已取消批量删除');
-  });
-}
-
-
-// 批量设置金币弹窗
-const batchGoldDialogVisible = ref(false)
-const batchGoldValue = ref(0)
-
-function onBatchSetGold() {
-  if (!selectedRows.value.length) {
-    return ElMessage.warning('请先勾选需要操作的视频');
-  }
-  batchGoldDialogVisible.value = true;
-}
-
-async function submitBatchGold() {
-  if (batchGoldValue.value < 0) {
-    return ElMessage.warning('金币数量不能小于0');
-  }
-  const ids = selectedRows.value.map(v => v.id);
-  const res = await batchSetGold(ids, batchGoldValue.value); // 调用 Store 函数
-  if (res && res.code === 0) { // 检查 code 属性
-    ElMessage.success('金币设置成功！');
-    batchGoldDialogVisible.value = false;
-    selectedRows.value = [];
-    fetchVideoList(searchForm.value); // 刷新列表
-  } else {
-    ElMessage.error(res?.msg || '金币设置失败'); // 错误消息来自后端或兜底
-  }
-}
-
-// 批量设置VIP
-async function onBatchVip() {
-  if (!selectedRows.value.length) {
-    return ElMessage.warning('请先选择要操作的视频');
-  }
-  await ElMessageBox.confirm('确定批量设置已选视频为VIP吗？', '提示', { type: 'warning' }).then(async () => {
-    const ids = selectedRows.value.map(v => v.id);
-    const res = await batchSetVip(ids, true); // 调用 Store 函数，设为VIP
-    if (res && res.code === 0) { // 检查 code 属性
-      ElMessage.success('批量设置VIP成功！');
-      selectedRows.value = [];
-      fetchVideoList(searchForm.value); // 刷新列表
-    } else {
-      ElMessage.error(res?.msg || '批量设置VIP失败'); // 错误消息来自后端或兜底
-    }
-  }).catch(() => {
-    ElMessage.info('已取消设置VIP');
-  });
-}
-// 批量升序置顶
-async function onBatchSortAsc() {
-  if (!selectedRows.value.length) {
-    return ElMessage.warning('请先选择要置顶排序的视频');
-  }
-  const ids = selectedRows.value.map(v => v.id);
-  const res = await batchSortAsc(ids); // 调用 Store 方法
-  if (res && res.code === 0) {
-    ElMessage.success('批量升序置顶成功！');
-    selectedRows.value = [];
-    searchForm.value.page = 1;
-    await nextTick();
-    fetchVideoList({ ...searchForm.value });
-  } else {
-    ElMessage.error(res?.msg || '批量升序置顶失败');
-  }
-}
-
-// 批量设置试看时长
-async function onBatchPreviewTime() {
-  if (!selectedRows.value.length) {
-    return ElMessage.warning('请先选择要操作的视频');
-  }
-  ElMessageBox.prompt('请输入要批量设置的试看时长(如：15秒、30秒)', '批量设置试看时长', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    inputPattern: /^\d+(秒|分钟|小时)$/, // 简单的时长格式校验
-    inputErrorMessage: '时长格式不正确，如：15秒，30分钟'
-  }).then(async ({ value }) => {
-    const ids = selectedRows.value.map(v => v.id);
-    const res = await batchSetDuration(ids, value); // 调用 Store 函数
-    if (res && res.code === 0) { // 检查 code 属性
-      ElMessage.success('试看时长设置成功！');
-      selectedRows.value = [];
-      fetchVideoList({ ...searchForm.value, page: 1, order: 'sort asc, id asc' });
-    } else {
-      ElMessage.error(res?.msg || '试看时长设置失败！'); // 错误消息来自后端或兜底
-    }
-  }).catch(() => {
-    ElMessage.info('已取消设置试看时长');
-  });
-}
-
-
-// =================== 添加视频弹窗 ====================
+// 弹窗状态管理
 const addDialogVisible = ref(false)
-const addForm = ref({
+const editDialogVisible = ref(false)
+const batchGoldDialogVisible = ref(false)
+const batchLikesDialogVisible = ref(false)
+const batchCollectDialogVisible = ref(false)
+const batchPlayDialogVisible = ref(false)
+const batchPreviewDialogVisible = ref(false)
+
+// 表单数据
+const addForm = ref<VideoForm>({
   title: '',
   parent_id: '',
   category_id: '',
-  tags: [] as string[],
+  tags: [],
   url: '',
   cover: '',
   preview: '15秒',
@@ -591,75 +668,62 @@ const addForm = ref({
   coin: 0
 })
 
-const addSubCategoryOptions = computed(() => {
-  if (!addForm.value.parent_id) return []
-  return douyinCategoryChildren.value.filter(c => c.parent_id === Number(addForm.value.parent_id))
-})
-
-function onParentChange() {
-  addForm.value.category_id = '' // 主分类改变时清空子分类
-}
-
-function onAdd() {
-  addDialogVisible.value = true
-  // 重置表单
-  Object.assign(addForm.value, {
-    title: '', parent_id: '', category_id: '', tags: [],
-    url: '', cover: '', preview: '15秒', vip: false, coin: 0
-  })
-}
-function onAddDialogClose() {
-  // 关闭弹窗时重置表单（确保再次打开是干净的）
-  Object.assign(addForm.value, {
-    title: '', parent_id: '', category_id: '', tags: [],
-    url: '', cover: '', preview: '15秒', vip: false, coin: 0
-  })
-}
-async function submitAdd() {
-  if (
-    !addForm.value.title ||
-    !addForm.value.parent_id ||
-    !addForm.value.category_id ||
-    !addForm.value.url
-  ) {
-    ElMessage.error('请填写完整的标题、主分类、子分类、视频URL地址');
-    return;
-  }
-
-  // 数据转换：vip (boolean -> 0/1), coin -> gold
-  const submitData = {
-    ...addForm.value,
-    is_vip: addForm.value.vip ? 1 : 0,
-    gold: addForm.value.coin,
-    tags: addForm.value.tags
-  };
-  // 移除前端特有字段
-  delete (submitData as any).vip;
-  delete (submitData as any).coin;
-
-  const res = await addVideo(submitData); // 调用 Store 函数
-  if (res && res.code === 0) { // 检查 code 属性
-    ElMessage.success('添加成功');
-    addDialogVisible.value = false;
-    fetchVideoList(searchForm.value); // 刷新列表
-  } else {
-    ElMessage.error(res?.msg || '添加失败'); // 错误消息来自后端或兜底
-  }
-}
-
-// =================== 编辑视频弹窗 ====================
-const editDialogVisible = ref(false)
-const editForm = ref({
-  id: null as number | null,
+const editForm = ref<VideoForm>({
+  id: null,
   title: '',
   parent_id: '',
   category_id: '',
-  tags: [] as string[],
+  tags: [],
   url: '',
   cover: '',
   preview: '',
   vip: false,
-  coin: 0
+  coin: 0,
+  likes: 0
+})
+
+// 批量操作数据
+const batchGoldValue = ref(0)
+const batchLikesValue = ref(0)
+const batchCollectValue = ref(0)
+const batchPlayValue = ref(0)
+const batchPreviewValue = ref('15秒')
+
+// 表单引用和加载状态
+const editFormRef = ref()
+const submitLoading = ref(false)
+
+// 表单验证规则
+const editFormRules = {
+  title: [
+    { required: true, message: '请输入视频标题', trigger: 'blur' },
+    { min: 2, max: 100, message: '标题长度应在2-100字符之间', trigger: 'blur' }
+  ],
+  parent_id: [
+    { required: true, message: '请选择主分类', trigger: 'change' }
+  ],
+  category_id: [
+    { required: true, message: '请选择子分类', trigger: 'change' }
+  ],
+  url: [
+    { required: true, message: '请输入视频地址', trigger: 'blur' },
+    { 
+      pattern: /^https?:\/\/.+/, 
+      message: '请输入有效的视频URL地址', 
+      trigger: 'blur' 
+    }
+  ]
+}
+
+// ======================= 计算属性 =======================
+const subCategoryOptions = computed(() => {
+  if (!searchForm.value.parent_id) return douyinCategoryChildren.value
+  return douyinCategoryChildren.value.filter(c => c.parent_id === Number(searchForm.value.parent_id))
+})
+
+const addSubCategoryOptions = computed(() => {
+  if (!addForm.value.parent_id) return []
+  return douyinCategoryChildren.value.filter(c => c.parent_id === Number(addForm.value.parent_id))
 })
 
 const editSubCategoryOptions = computed(() => {
@@ -667,193 +731,492 @@ const editSubCategoryOptions = computed(() => {
   return douyinCategoryChildren.value.filter(c => c.parent_id === Number(editForm.value.parent_id))
 })
 
-function onEditParentChange() {
-  editForm.value.category_id = '' // 主分类改变时清空子分类
-}
-function onEditDialogClose() {
-  // 关闭弹窗时重置表单
-  Object.assign(editForm.value, {
-    id: null, title: '', parent_id: '', category_id: '', tags: [],
-    url: '', cover: '', preview: '', vip: false, coin: 0
-  });
-}
-
-async function onEdit(row: VideoRow) {
-  const detailData = await fetchVideoDetail(row.id); // detailData 已经是后端返回的 data 对象
-
-  if (detailData) {
-    // 填充表单，注意后端返回的 is_vip 和 gold 需要转换为前端的 vip 和 coin
-    Object.assign(editForm.value, {
-      ...detailData, // 直接使用 detailData
-      vip: detailData.is_vip === 1, // 后端 0/1 转前端 boolean
-      coin: detailData.gold,        // 后端 gold 转前端 coin
-      tags: detailData.tags || [],  // 确保标签是数组
-      url: detailData.url || ''      // 确保 url 字段正确映射
-    });
-    editDialogVisible.value = true;
-  } else {
-    ElMessage.error('获取视频详情失败: 未返回有效数据');
+// ======================= 初始化 =======================
+onMounted(async () => {
+  try {
+    await Promise.all([
+      fetchVideoList(searchForm.value),
+      fetchDouyinCategories(),
+      fetchDouyinTags()
+    ])
+  } catch (error) {
+    console.error('初始化数据加载失败:', error)
   }
-}
+})
 
-async function submitEdit() {
-  if (
-    !editForm.value.title ||
-    !editForm.value.parent_id ||
-    !editForm.value.category_id ||
-    !editForm.value.url
-  ) {
-    ElMessage.error('请填写完整的标题、主分类、子分类、视频URL地址');
-    return;
+// ======================= 工具函数 =======================
+function checkSelection(): boolean {
+  if (!selectedRows.value.length) {
+    ElMessage.warning('请先勾选需要操作的视频')
+    return false
   }
-  if (!editForm.value.id) { // 编辑时ID必须存在
-      ElMessage.error('编辑失败：视频ID不存在');
-      return;
-  }
-
-  // 数据转换：vip (boolean -> 0/1), coin -> gold
-  const submitData = {
-    ...editForm.value,
-    is_vip: editForm.value.vip ? 1 : 0,
-    gold: editForm.value.coin,
-    tags: editForm.value.tags
-  };
-  // 移除前端特有字段
-  delete (submitData as any).vip;
-  delete (submitData as any).coin;
-  // 确保ID在提交数据中
-  (submitData as any).id = editForm.value.id;
-
-  const res = await updateVideo(submitData); // 调用 Store 函数
-  if (res && res.code === 0) { // 检查 code 属性
-    ElMessage.success('保存成功');
-    editDialogVisible.value = false;
-    fetchVideoList(searchForm.value); // 刷新列表
-  } else {
-    ElMessage.error(res?.msg || '保存失败'); // 错误消息来自后端或兜底
-  }
+  return true
 }
 
-// ========== 单条视频删除 ==========
-// The single delete function `onDelete` was present in the script but not referenced in the template.
-// I'm keeping it for completeness, assuming it might be used elsewhere or was meant to be added to an individual row action.
-async function onDelete(row: VideoRow) {
-  await ElMessageBox.confirm(`确定删除视频 “${row.title}” 吗？`, '警告', { type: 'warning' }).then(async () => {
-    const res = await deleteVideo([row.id]); // Modified to accept array for consistency, assuming backend deleteVideo can handle single ID in array
-    if (res && res.code === 0) { // 检查 code 属性
-      ElMessage.success('删除成功');
-      fetchVideoList(searchForm.value); // 刷新列表
-    } else {
-      ElMessage.error(res?.msg || '删除失败'); // Error message from backend or fallback
-    }
-  }).catch(() => {
-    ElMessage.info('已取消删除');
-  });
+// ======================= 表格操作 =======================
+function handleSelectionChange(rows: VideoRow[]) {
+  selectedRows.value = rows
 }
 
-// ============== 搜索/重置 ==============
-function onSearch(page) {
-  if (typeof page === 'number') {
-    searchForm.value.page = page;
-  } else {
-    searchForm.value.page = 1;
-  }
-  fetchVideoList(searchForm.value);
-}
-
-
-function onReset() {
-  searchForm.value = { page: 1, pageSize: 10, keyword: '', parent_id: '', category_id: '', tags: [] };
-  fetchVideoList(searchForm.value); // 重置后重新加载数据
-}
-
-// ========== 复制链接 ==========
-function onCopyLink(row: VideoRow) {
-  const linkToCopy = row.url || row.m3u8; // 优先复制 url，其次 m3u8
-
-  if (!linkToCopy) {
-    ElMessage.warning('没有视频链接可复制');
-    return;
-  }
-
-  // 使用现代 Clipboard API
-  navigator.clipboard.writeText(linkToCopy)
-    .then(() => {
-      ElMessage.success('链接已复制');
-    })
-    .catch(err => {
-      // 兼容性处理或 fallback 到旧方法 (如 document.execCommand('copy'))
-      console.error('复制失败：', err);
-      ElMessage.error('复制链接失败');
-    });
-}
-
-// ========== 标题 tooltip 控制 ==========
-const visibleTitleIndex = ref<number | null>(null)
 function showTitle(index: number) {
   visibleTitleIndex.value = index
 }
+
 function hideTitle() {
   visibleTitleIndex.value = null
 }
 
-// ======================= 文件上传逻辑 =======================
-// 图片上传成功回调
+function onCopyLink(row: VideoRow) {
+  const linkToCopy = row.url || row.m3u8
+  if (!linkToCopy) {
+    ElMessage.warning('没有视频链接可复制')
+    return
+  }
+
+  navigator.clipboard.writeText(linkToCopy)
+    .then(() => {
+      ElMessage.success('链接已复制')
+    })
+    .catch(err => {
+      console.error('复制失败：', err)
+      ElMessage.error('复制链接失败')
+    })
+}
+
+// ======================= 搜索相关 =======================
+function onSearch(page?: number) {
+  if (typeof page === 'number') {
+    searchForm.value.page = page
+  } else {
+    searchForm.value.page = 1
+  }
+  fetchVideoList(searchForm.value)
+}
+
+function onReset() {
+  Object.assign(searchForm.value, {
+    page: 1,
+    pageSize: 10,
+    keyword: '',
+    parent_id: '',
+    category_id: '',
+    tags: []
+  })
+  fetchVideoList(searchForm.value)
+}
+
+// ======================= 添加视频 =======================
+function onAdd() {
+  addDialogVisible.value = true
+  resetAddForm()
+}
+
+function resetAddForm() {
+  Object.assign(addForm.value, {
+    title: '',
+    parent_id: '',
+    category_id: '',
+    tags: [],
+    url: '',
+    cover: '',
+    preview: '15秒',
+    vip: false,
+    coin: 0
+  })
+}
+
+function onAddDialogClose() {
+  resetAddForm()
+}
+
+function onParentChange() {
+  addForm.value.category_id = ''
+}
+
+async function submitAdd() {
+  if (!addForm.value.title || !addForm.value.parent_id || 
+      !addForm.value.category_id || !addForm.value.url) {
+    ElMessage.error('请填写完整的标题、主分类、子分类、视频URL地址')
+    return
+  }
+
+  try {
+    const submitData = {
+      ...addForm.value,
+      is_vip: addForm.value.vip ? 1 : 0,
+      gold: addForm.value.coin,
+      tags: addForm.value.tags
+    }
+    delete (submitData as any).vip
+    delete (submitData as any).coin
+
+    const res = await addVideo(submitData)
+    if (res) {
+      ElMessage.success('添加成功')
+      addDialogVisible.value = false
+      fetchVideoList(searchForm.value)
+    }
+  } catch (error) {
+    console.error('添加视频失败:', error)
+  }
+}
+
+// ======================= 编辑视频 =======================
+async function onEdit(row: VideoRow) {
+  try {
+    // 先直接显示弹窗，不依赖API调用
+    editDialogVisible.value = true
+    
+    // 预设一些默认值
+    Object.assign(editForm.value, {
+      id: row.id,
+      title: row.title || '',
+      parent_id: row.parent_id?.toString() || '',
+      category_id: row.category_id?.toString() || '',
+      tags: row.tags || [],
+      url: row.url || row.m3u8 || '',
+      cover: row.cover || '',
+      vip: row.vip || (row.is_vip === 1),
+      coin: row.coin || row.gold || 0,
+      likes: row.likes || row.like_count || 0
+    })
+    
+    // 异步获取详细数据
+    const response = await fetchVideoDetail(row.id)
+    
+    if (response?.data) {
+      const detailData = response.data
+      Object.assign(editForm.value, {
+        ...detailData,
+        vip: detailData.is_vip === 1,
+        coin: detailData.gold,
+        tags: detailData.tags || [],
+        url: detailData.url || '',
+        likes: detailData.likes || detailData.like_count || 0
+      })
+    }
+  } catch (error) {
+    console.error('获取视频详情失败:', error)
+    ElMessage.error('获取视频详情失败')
+    // 即使API失败，也保持弹窗打开状态
+  }
+}
+
+function onEditParentChange() {
+  editForm.value.category_id = ''
+}
+
+function onEditDialogClose() {
+  Object.assign(editForm.value, {
+    id: null,
+    title: '',
+    parent_id: '',
+    category_id: '',
+    tags: [],
+    url: '',
+    cover: '',
+    preview: '',
+    vip: false,
+    coin: 0,
+    likes: 0
+  })
+  // 重置表单验证状态
+  if (editFormRef.value) {
+    editFormRef.value.clearValidate()
+  }
+}
+
+function resetEditForm() {
+  if (editForm.value.id) {
+    // 重新获取视频详情
+    onEdit({ id: editForm.value.id } as VideoRow)
+  }
+}
+
+function handleImageError() {
+  ElMessage.warning('图片加载失败，请检查图片地址是否正确')
+}
+
+async function submitEdit() {
+  // 表单验证
+  if (editFormRef.value) {
+    try {
+      await editFormRef.value.validate()
+    } catch (error) {
+      ElMessage.error('请检查表单填写是否正确')
+      return
+    }
+  }
+
+  if (!editForm.value.id) {
+    ElMessage.error('编辑失败：视频ID不存在')
+    return
+  }
+
+  submitLoading.value = true
+  
+  try {
+    const submitData = {
+      ...editForm.value,
+      is_vip: editForm.value.vip ? 1 : 0,
+      gold: editForm.value.coin,
+      tags: editForm.value.tags,
+      id: editForm.value.id,
+      like_count: editForm.value.likes || 0  // 将 likes 映射到 like_count
+    }
+    delete (submitData as any).vip
+    delete (submitData as any).coin
+    delete (submitData as any).likes  // 删除 likes 字段
+
+    const res = await updateVideo(submitData)
+    if (res) {
+      ElMessage.success('保存成功')
+      editDialogVisible.value = false
+      fetchVideoList(searchForm.value)
+    }
+  } catch (error) {
+    console.error('更新视频失败:', error)
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+// ======================= 批量操作 =======================
+async function onBatchDelete() {
+  if (!checkSelection()) return
+  
+  try {
+    await ElMessageBox.confirm('确定批量删除已选视频吗？', '警告', { type: 'warning' })
+    const ids = selectedRows.value.map(v => v.id)
+    await batchDeleteVideos(ids)
+    ElMessage.success('批量删除成功')
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量删除失败:', error)
+    }
+  }
+}
+
+async function onBatchVip() {
+  if (!checkSelection()) return
+  
+  try {
+    await ElMessageBox.confirm('确定批量设置已选视频为VIP吗？', '提示', { type: 'warning' })
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSetVip(ids, true)
+    ElMessage.success('批量设置VIP成功！')
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量设置VIP失败:', error)
+    }
+  }
+}
+
+async function onBatchUnVip() {
+  if (!checkSelection()) return
+  
+  try {
+    await ElMessageBox.confirm('确定批量取消已选视频的VIP状态吗？', '提示', { type: 'warning' })
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSetVip(ids, false)
+    ElMessage.success('批量取消VIP成功！')
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量取消VIP失败:', error)
+    }
+  }
+}
+
+async function onBatchSortAsc() {
+  if (!checkSelection()) return
+  
+  try {
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSortAsc(ids)
+    ElMessage.success('批量升序置顶成功！')
+    selectedRows.value = []
+    searchForm.value.page = 1
+    await nextTick()
+    fetchVideoList({ ...searchForm.value })
+  } catch (error) {
+    console.error('批量升序置顶失败:', error)
+  }
+}
+
+// ======================= 批量设置弹窗操作 =======================
+function onBatchSetLikes() {
+  if (!checkSelection()) return
+  batchLikesDialogVisible.value = true
+}
+
+async function submitBatchLikes() {
+  if (batchLikesValue.value < 0) {
+    ElMessage.warning('点赞数量不能小于0')
+    return
+  }
+  
+  try {
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSetLikes(ids, batchLikesValue.value)
+    ElMessage.success('点赞设置成功！')
+    batchLikesDialogVisible.value = false
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    console.error('批量设置点赞失败:', error)
+  }
+}
+
+function onBatchSetGold() {
+  if (!checkSelection()) return
+  batchGoldDialogVisible.value = true
+}
+
+async function submitBatchGold() {
+  if (batchGoldValue.value < 0) {
+    ElMessage.warning('金币数量不能小于0')
+    return
+  }
+  
+  try {
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSetGold(ids, batchGoldValue.value)
+    ElMessage.success('金币设置成功！')
+    batchGoldDialogVisible.value = false
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    console.error('批量设置金币失败:', error)
+  }
+}
+
+function onBatchSetCollect() {
+  if (!checkSelection()) return
+  batchCollectDialogVisible.value = true
+}
+
+async function submitBatchCollect() {
+  if (batchCollectValue.value < 0) {
+    ElMessage.warning('收藏数量不能小于0')
+    return
+  }
+  
+  try {
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSetCollect(ids, batchCollectValue.value)
+    ElMessage.success('收藏设置成功！')
+    batchCollectDialogVisible.value = false
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    console.error('批量设置收藏失败:', error)
+  }
+}
+
+function onBatchSetPlay() {
+  if (!checkSelection()) return
+  batchPlayDialogVisible.value = true
+}
+
+async function submitBatchPlay() {
+  if (batchPlayValue.value < 0) {
+    ElMessage.warning('播放数量不能小于0')
+    return
+  }
+  
+  try {
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSetPlay(ids, batchPlayValue.value)
+    ElMessage.success('播放数设置成功！')
+    batchPlayDialogVisible.value = false
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    console.error('批量设置播放数失败:', error)
+  }
+}
+
+function onBatchPreviewTime() {
+  if (!checkSelection()) return
+  batchPreviewDialogVisible.value = true
+}
+
+async function submitBatchPreviewTime() {
+  if (!batchPreviewValue.value) {
+    ElMessage.warning('请设置试看时长')
+    return
+  }
+  
+  try {
+    const ids = selectedRows.value.map(v => v.id)
+    await batchSetDuration(ids, batchPreviewValue.value)
+    ElMessage.success('试看时长设置成功！')
+    batchPreviewDialogVisible.value = false
+    selectedRows.value = []
+    fetchVideoList(searchForm.value)
+  } catch (error) {
+    console.error('批量设置试看时长失败:', error)
+  }
+}
+
+// ======================= 文件上传 =======================
 const handleImageUploadSuccess: UploadProps['onSuccess'] = (response, uploadFile) => {
   if (response.code === 0 && response.data && response.data.url) {
-    editForm.value.cover = response.data.url; // 将返回的URL设置到封面图地址
-    ElMessage.success('封面图上传成功！');
+    editForm.value.cover = response.data.url
+    ElMessage.success('封面图上传成功！')
   } else {
-    ElMessage.error(response.msg || '封面图上传失败！');
+    ElMessage.error(response.msg || '封面图上传失败！')
   }
-};
+}
 
-// 视频上传成功回调
 const handleVideoUploadSuccess: UploadProps['onSuccess'] = (response, uploadFile) => {
   if (response.code === 0 && response.data && response.data.url) {
-    editForm.value.url = response.data.url; // 将返回的URL设置到视频URL地址
-    ElMessage.success('视频上传成功！');
+    editForm.value.url = response.data.url
+    ElMessage.success('视频上传成功！')
   } else {
-    ElMessage.error(response.msg || '视频上传失败！');
+    ElMessage.error(response.msg || '视频上传失败！')
   }
-};
+}
 
-// 上传失败回调（图片和视频通用）
 const handleUploadError: UploadProps['onError'] = (error, uploadFile, uploadFiles) => {
-  ElMessage.error('文件上传失败，请重试！');
-  console.error('Upload Error:', error);
-};
+  ElMessage.error('文件上传失败，请重试！')
+  console.error('Upload Error:', error)
+}
 
-// 上传前校验（图片）
 const beforeImageUpload: UploadProps['beforeUpload'] = (rawFile) => {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const isAllowedType = allowedTypes.includes(rawFile.type);
-  const isLt5M = rawFile.size / 1024 / 1024 < 5; // 5MB
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  const isAllowedType = allowedTypes.includes(rawFile.type)
+  const isLt5M = rawFile.size / 1024 / 1024 < 5
 
   if (!isAllowedType) {
-    ElMessage.error('封面图片只能是 JPG/PNG/GIF/WEBP 格式!');
+    ElMessage.error('封面图片只能是 JPG/PNG/GIF/WEBP 格式!')
   }
   if (!isLt5M) {
-    ElMessage.error('封面图片大小不能超过 5MB!');
+    ElMessage.error('封面图片大小不能超过 5MB!')
   }
-  return isAllowedType && isLt5M;
-};
+  return isAllowedType && isLt5M
+}
 
-// 上传前校验（视频）
 const beforeVideoUpload: UploadProps['beforeUpload'] = (rawFile) => {
-  const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'application/x-mpegURL', 'application/octet-stream'];
-  const isAllowedType = allowedTypes.includes(rawFile.type);
-  const isLt500M = rawFile.size / 1024 / 1024 < 500; // 500MB
+  const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'application/x-mpegURL', 'application/octet-stream']
+  const isAllowedType = allowedTypes.includes(rawFile.type)
+  const isLt500M = rawFile.size / 1024 / 1024 < 500
 
   if (!isAllowedType) {
-    ElMessage.error('视频文件只能是 MP4/WEBM/MOV/M3U8 格式!');
+    ElMessage.error('视频文件只能是 MP4/WEBM/MOV/M3U8 格式!')
   }
   if (!isLt500M) {
-    ElMessage.error('视频文件大小不能超过 500MB!');
+    ElMessage.error('视频文件大小不能超过 500MB!')
   }
-  return isAllowedType && isLt500M;
-};
-
+  return isAllowedType && isLt500M
+}
 </script>
 
 <style scoped>
@@ -873,7 +1236,7 @@ const beforeVideoUpload: UploadProps['beforeUpload'] = (rawFile) => {
 }
 .el-form-item {
   margin-right: 7px;
-  margin-bottom: 15px; /* 调整表单项间距 */
+  margin-bottom: 15px;
 }
 .custom-table {
   font-size: 12px;
@@ -940,10 +1303,30 @@ const beforeVideoUpload: UploadProps['beforeUpload'] = (rawFile) => {
   padding: 7px 10px;
   white-space: pre-line;
 }
-/* 自定义样式，让上传按钮和输入框并排 */
 .el-form-item .el-upload {
-    margin-left: 10px; /* 调整上传按钮与输入框的间距 */
-    display: inline-flex; /* 确保按钮也参与flex布局 */
-    align-items: center;
+  margin-left: 10px;
+  display: inline-flex;
+  align-items: center;
+}
+.edit-dialog .el-dialog__body {
+  padding: 20px;
+}
+.cover-preview {
+  display: flex;
+  align-items: flex-start;
+}
+.cover-preview img {
+  transition: all 0.3s ease;
+}
+.cover-preview img:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.el-divider {
+  margin: 20px 0 15px 0;
+}
+.el-divider .el-divider__text {
+  font-weight: 600;
+  color: #409eff;
 }
 </style>

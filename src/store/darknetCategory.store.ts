@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import type { DarknetCategory } from '@/types/darknetCategory'
 import * as darknetCategoryApi from '@/api/darknetCategory.api'
+import type { DarknetCategory } from '@/types/darknetCategory'
 
 export const useDarknetCategoryStore = defineStore('darknetCategory', () => {
   const parentCategories = ref<DarknetCategory[]>([])
@@ -19,48 +18,38 @@ export const useDarknetCategoryStore = defineStore('darknetCategory', () => {
       } else {
         parentCategories.value = []
         childCategories.value = []
-        ElMessage.error('获取暗网分类列表失败: ' + (res.data?.msg || '未知错误'))
+        throw new Error(res.data?.msg || '获取暗网分类列表失败')
       }
       return res.data
-    } catch (error) {
+    } catch (error: any) {
       parentCategories.value = []
       childCategories.value = []
-      ElMessage.error('请求暗网分类列表失败')
       throw error
     } finally {
       loading.value = false
     }
   }
 
-  async function addCategory(name: string) {
-    const res = await darknetCategoryApi.addDarknetCategory(name)
+  async function addCategory(data: any) {
+    const res = await darknetCategoryApi.addDarknetCategory(data)
     if (res.data?.code === 0) {
-      ElMessage.success('新增主分类成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '新增主分类失败')
     }
     return res.data
   }
 
-  async function addChildCategory(data: Omit<DarknetCategory, 'id' | 'videoCount' | 'create_time' | 'update_time'>) {
+  async function addChildCategory(data: any) {
     const res = await darknetCategoryApi.addDarknetChildCategory(data)
     if (res.data?.code === 0) {
-      ElMessage.success('新增子分类成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '新增子分类失败')
     }
     return res.data
   }
 
-  async function updateCategory(data: Partial<DarknetCategory> & { id: number }) {
+  async function updateCategory(data: any) {
     const res = await darknetCategoryApi.updateDarknetCategory(data)
     if (res.data?.code === 0) {
-      ElMessage.success('编辑分类成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '编辑分类失败')
     }
     return res.data
   }
@@ -68,10 +57,7 @@ export const useDarknetCategoryStore = defineStore('darknetCategory', () => {
   async function removeCategory(id: number) {
     const res = await darknetCategoryApi.deleteDarknetCategory(id)
     if (res.data?.code === 0) {
-      ElMessage.success('删除分类成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '删除分类失败')
     }
     return res.data
   }
@@ -79,10 +65,7 @@ export const useDarknetCategoryStore = defineStore('darknetCategory', () => {
   async function batchRemoveCategories(ids: number[]) {
     const res = await darknetCategoryApi.batchDeleteDarknetCategories(ids)
     if (res.data?.code === 0) {
-      ElMessage.success('批量删除成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '批量删除失败')
     }
     return res.data
   }
@@ -90,10 +73,7 @@ export const useDarknetCategoryStore = defineStore('darknetCategory', () => {
   async function batchUpdateSort(list: { id: number; sort: number }[]) {
     const res = await darknetCategoryApi.batchUpdateDarknetCategorySort(list)
     if (res.data?.code === 0) {
-      ElMessage.success('批量排序成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '批量排序失败')
     }
     return res.data
   }
@@ -101,10 +81,7 @@ export const useDarknetCategoryStore = defineStore('darknetCategory', () => {
   async function updateCategoryTags(id: number, tags: string[]) {
     const res = await darknetCategoryApi.updateDarknetCategoryTags(id, tags)
     if (res.data?.code === 0) {
-      ElMessage.success('标签更新成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '标签更新失败')
     }
     return res.data
   }
@@ -112,10 +89,7 @@ export const useDarknetCategoryStore = defineStore('darknetCategory', () => {
   async function updateCategorySort(id: number, sort: number) {
     const res = await darknetCategoryApi.updateDarknetCategorySort(id, sort)
     if (res.data?.code === 0) {
-      ElMessage.success('排序保存成功')
       await fetchCategories()
-    } else {
-      ElMessage.error(res.data?.msg || '排序保存失败')
     }
     return res.data
   }
