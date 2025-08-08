@@ -39,10 +39,9 @@ export const useAnimeVideosStore = defineStore('animeVideos', () => {
     const submitData = {
       ...data,
       is_vip: data.vip ? 1 : 0,
-      gold: data.coin,
+      coin: data.coin,
     }
     delete submitData.vip
-    delete submitData.coin
     const res = await animeVideosApi.addAnimeVideo(submitData)
     if (res.data?.code === 0) {
       ElMessage.success('新增成功')
@@ -58,10 +57,9 @@ export const useAnimeVideosStore = defineStore('animeVideos', () => {
     const submitData = {
       ...data,
       is_vip: data.vip ? 1 : 0,
-      gold: data.coin,
+      coin: data.coin,
     }
     delete submitData.vip
-    delete submitData.coin
     const res = await animeVideosApi.updateAnimeVideo(submitData)
     if (res.data?.code === 0) {
       ElMessage.success('保存成功')
@@ -155,6 +153,17 @@ export const useAnimeVideosStore = defineStore('animeVideos', () => {
     }
     return res.data
   }
+// 批量设置点赞数
+async function batchSetLikes(ids: number[], likesCount: number) {
+  const res = await animeVideosApi.batchSetAnimeLikes(ids, likesCount)
+  if (res.data?.code === 0) {
+    ElMessage.success('点赞数设置成功')
+    await fetchList()
+  } else {
+    ElMessage.error(res.data?.msg || '点赞数设置失败')
+  }
+  return res.data
+}
 
   // 批量升序置顶
   async function batchSortAsc(ids: number[]) {
@@ -202,6 +211,7 @@ export const useAnimeVideosStore = defineStore('animeVideos', () => {
     batchSetGold,
     batchSetPlay,     // 新增
     batchSetCollect,  // 新增
+     batchSetLikes,
     batchSortAsc,     // 新增
     fetchDetail,
   }

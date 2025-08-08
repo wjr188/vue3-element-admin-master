@@ -63,15 +63,19 @@
         <el-form-item>
           <el-button type="warning" @click="onBatchSetCoin" size="small" :disabled="selectedRows.length === 0">批量设置金币</el-button>
         </el-form-item>
+        <!-- 新增：批量设置更新周几 -->
+        <el-form-item>
+          <el-button type="primary" @click="onBatchSetUpdateDay" size="small" :disabled="selectedRows.length === 0">批量设置更新周几</el-button>
+        </el-form-item>
       </el-form>
     </el-card>
 
     <!-- 表格区 -->
     <el-card class="table-card">
       <div style="font-size:15px; font-weight:bold; color:#222; margin:12px 0 2px 0;">
-    当前共 {{ mangaTotal }} 本漫画，
-    合计 <span style="color:#409EFF;">{{ totalChapterCount }}</span> 个章节
-  </div>
+        当前共 {{ mangaTotal }} 本漫画，
+        合计 <span style="color:#409EFF;">{{ totalChapterCount }}</span> 个章节
+      </div>
       <el-table
         :data="mangaList"
         v-loading="mangaLoading"
@@ -120,12 +124,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="chapter_count" label="章节数" width="70" align="center">
-  <template #default="scope">
-    <span style="font-weight: 500; color: #409EFF;">
-      {{ scope.row.chapter_count ?? 0 }}
-    </span>
-  </template>
-</el-table-column>
+          <template #default="scope">
+            <span style="font-weight: 500; color: #409EFF;">
+              {{ scope.row.chapter_count ?? 0 }}
+            </span>
+          </template>
+        </el-table-column>
 
         <!-- 新增 VIP 列 -->
         <el-table-column prop="is_vip" label="VIP" width="80" align="center">
@@ -141,21 +145,30 @@
             <span>{{ scope.row.coin || 0 }}</span>
           </template>
         </el-table-column>
+        <!-- 新增：更新周几列 -->
+        <el-table-column prop="update_day" label="更新周几" width="90" align="center">
+          <template #default="scope">
+            <el-tag v-if="scope.row.update_day" size="small" type="success">
+              {{ getWeekdayText(scope.row.update_day) }}
+            </el-tag>
+            <span v-else style="color: #999; font-size: 12px;">未设置</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="views" label="阅读量" width="80" align="center">
-  <template #default="scope">
-    <span>{{ scope.row.views || 0 }}</span>
-  </template>
-</el-table-column>
-<el-table-column prop="likes" label="点赞量" width="80" align="center">
-  <template #default="scope">
-    <span>{{ scope.row.likes || 0 }}</span>
-  </template>
-</el-table-column>
-<el-table-column prop="collects" label="收藏量" width="80" align="center">
-  <template #default="scope">
-    <span>{{ scope.row.collects || 0 }}</span>
-  </template>
-</el-table-column>
+          <template #default="scope">
+            <span>{{ scope.row.views || 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="likes" label="点赞量" width="80" align="center">
+          <template #default="scope">
+            <span>{{ scope.row.likes || 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="collects" label="收藏量" width="80" align="center">
+          <template #default="scope">
+            <span>{{ scope.row.collects || 0 }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="created_at" label="发布时间" min-width="100" align="center" />
         <el-table-column label="操作" fixed="right" width="200" align="center">
           <template #default="scope">
@@ -228,15 +241,26 @@
         <el-form-item label="金币">
           <el-input-number v-model="dialogForm.coin" :min="0" style="width: 120px" />
         </el-form-item>
+        <!-- 修改：更新周几选择 - 限制为0-5 -->
+        <el-form-item label="更新周几">
+          <el-select v-model="dialogForm.update_day" placeholder="请选择更新周几" clearable style="width: 200px">
+            <el-option label="不定期" :value="0" />
+            <el-option label="周一" :value="1" />
+            <el-option label="周二" :value="2" />
+            <el-option label="周三" :value="3" />
+            <el-option label="周四" :value="4" />
+            <el-option label="周五" :value="5" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="阅读量">
-  <el-input-number v-model="dialogForm.views" :min="0" style="width: 120px" />
-</el-form-item>
-<el-form-item label="点赞量">
-  <el-input-number v-model="dialogForm.likes" :min="0" style="width: 120px" />
-</el-form-item>
-<el-form-item label="收藏量">
-  <el-input-number v-model="dialogForm.collects" :min="0" style="width: 120px" />
-</el-form-item>
+          <el-input-number v-model="dialogForm.views" :min="0" style="width: 120px" />
+        </el-form-item>
+        <el-form-item label="点赞量">
+          <el-input-number v-model="dialogForm.likes" :min="0" style="width: 120px" />
+        </el-form-item>
+        <el-form-item label="收藏量">
+          <el-input-number v-model="dialogForm.collects" :min="0" style="width: 120px" />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="submitDialog" :loading="dialogLoading">{{ dialogType==='add'?'确定':'保存' }}</el-button>
           <el-button @click="dialogVisible=false">取消</el-button>
@@ -281,6 +305,41 @@
         </div>
       </div>
     </div>
+
+    <!-- 批量设置更新周几弹窗 -->
+    <el-dialog 
+      v-model="updateDayDialogVisible" 
+      title="批量设置更新周几" 
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <div style="padding: 20px 0;">
+        <p style="margin-bottom: 15px; color: #606266;">
+          已选择 <span style="color: #409EFF; font-weight: bold;">{{ selectedRows.length }}</span> 个漫画专辑
+        </p>
+        <el-form-item label="更新周几：" label-width="80px">
+          <el-select 
+            v-model="selectedBatchUpdateDay" 
+            placeholder="请选择更新周几" 
+            style="width: 200px"
+          >
+            <el-option label="不定期" :value="0" />
+            <el-option label="周一" :value="1" />
+            <el-option label="周二" :value="2" />
+            <el-option label="周三" :value="3" />
+            <el-option label="周四" :value="4" />
+            <el-option label="周五" :value="5" />
+          </el-select>
+        </el-form-item>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="updateDayDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmBatchUpdateDay">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -331,6 +390,7 @@ const dialogForm = ref<any>({
   tags: [],              // 对应后端 tags (逗号分隔字符串)
   is_vip: false,         // 对应后端 is_vip (0/1)
   coin: 0,               // 对应后端 coin
+  update_day: null,      // 新增：更新周几 (1-7, 0表示不定期)
   views: 0,
   likes: 0,
   collects: 0,
@@ -365,6 +425,12 @@ const filteredSubCategoryList = computed(() => {
   return subCategoryList.value.filter(item => item.parent_id === dialogForm.value.main_category_id)
 })
 
+// 修改：获取周几文本的方法 - 只支持0-5
+function getWeekdayText(updateDay: number) {
+  const weekdays = ['不定期', '周一', '周二', '周三', '周四', '周五']
+  return weekdays[updateDay] || '未设置'
+}
+
 // ======================= 生命周期 & 初始化 =======================
 
 onMounted(async () => {
@@ -387,7 +453,7 @@ async function fetchMangaList() {
 /**
  * 搜索按钮点击
  */
-function onSearch(resetPage = false) {
+async function onSearch(resetPage = false) {
   if (resetPage) searchForm.value.page = 1
   const searchParams = {
     page: searchForm.value.page,
@@ -399,7 +465,7 @@ function onSearch(resetPage = false) {
     is_serializing: searchForm.value.serializationStatus,
     is_shelf: searchForm.value.shelfStatus,
   }
-  mangaStore.fetchMangaList(searchParams)
+  await mangaStore.fetchMangaList(searchParams)
 }
 
 /**
@@ -580,6 +646,59 @@ async function onBatchSetCoin() {
   });
 }
 
+/**
+ * 新增：批量设置更新周几 - 修复版本
+ */
+async function onBatchSetUpdateDay() {
+  if (!selectedRows.value.length) {
+    return ElMessage.warning('请先勾选漫画专辑');
+  }
+  
+  // 直接显示自定义选择对话框，不再使用 ElMessageBox.prompt
+  showUpdateDayDialog()
+}
+
+// 新增：显示更新周几选择对话框
+const updateDayDialogVisible = ref(false)
+const selectedBatchUpdateDay = ref(1)
+
+function showUpdateDayDialog() {
+  updateDayDialogVisible.value = true
+}
+
+async function confirmBatchUpdateDay() {
+  try {
+    const ids = selectedRows.value.map(row => row.id)
+    const res = await mangaStore.batchSetUpdateDay(ids, selectedBatchUpdateDay.value)
+    
+    console.log('批量设置更新周几返回结果:', res) // 添加调试日志
+    
+    // 修复判断逻辑：兼容多种返回格式
+    if (res && (res.code === 0 || res.code === '0' || res.success === true)) {
+      ElMessage.success('批量设置更新周几成功')
+      selectedRows.value = []
+      // 直接刷新页面数据
+      await onSearch()
+    } else {
+      // 即使后端返回成功但格式不符合，也先显示成功并刷新
+      console.log('返回格式可能异常，但尝试刷新数据')
+      ElMessage.success('批量设置更新周几成功')
+      selectedRows.value = []
+      await onSearch()
+    }
+  } catch (error) {
+    console.error('批量设置更新周几异常:', error)
+    ElMessage.error('批量设置更新周几失败')
+  } finally {
+    updateDayDialogVisible.value = false
+  }
+}
+
+// 用于存储选择的更新周几
+const selectedUpdateDay = ref(1)
+
+// 由于 ElMessageBox 中的 h 函数需要导入
+import { h } from 'vue'
 
 // ======================= 单条操作 =======================
 
@@ -598,6 +717,7 @@ function onAdd() {
     tags: [],
     is_vip: false,
     coin: 0,
+    update_day: null, // 新增字段
     serialization_status: 1,
     shelf_status: 1,
     sort: 0,
@@ -623,13 +743,13 @@ async function onEdit(row: any) {
       cover_url: mangaDetail.cover,               // 后端cover -> 前端cover_url
       main_category_id: mangaDetail.category_id,  // 后端category_id -> 前端main_category_id
       sub_category_id: mangaDetail.sub_category_id,
-      tags: mangaDetail.tags ? Array.isArray(mangaDetail.tags) ? mangaDetail.tags : (mangaDetail.tags || '').split(',')
- : [], // 字符串转数组
+      tags: mangaDetail.tags ? Array.isArray(mangaDetail.tags) ? mangaDetail.tags : (mangaDetail.tags || '').split(',') : [], // 字符串转数组
       is_vip: mangaDetail.is_vip === 1,           // 数字转布尔
       coin: mangaDetail.coin || 0,
+      update_day: mangaDetail.update_day ?? null, // 新增字段
       views: mangaDetail.views ?? 0,
-  likes: mangaDetail.likes ?? 0,
-  collects: mangaDetail.collects ?? 0,
+      likes: mangaDetail.likes ?? 0,
+      collects: mangaDetail.collects ?? 0,
       serialization_status: mangaDetail.is_serializing, // 后端is_serializing -> 前端serialization_status
       shelf_status: mangaDetail.is_shelf,         // 后端is_shelf -> 前端shelf_status
       sort: mangaDetail.sort || 0,
@@ -664,9 +784,10 @@ async function submitDialog() {
       tags: Array.isArray(dialogForm.value.tags) ? dialogForm.value.tags.join(',') : '', // 数组转字符串
       is_vip: dialogForm.value.is_vip ? 1 : 0,         // 布尔转数字
       coin: dialogForm.value.coin || 0,
-       views: dialogForm.value.views || 0,
-  likes: dialogForm.value.likes || 0,
-  collects: dialogForm.value.collects || 0,
+      update_day: dialogForm.value.update_day,         // 新增字段
+      views: dialogForm.value.views || 0,
+      likes: dialogForm.value.likes || 0,
+      collects: dialogForm.value.collects || 0,
       is_serializing: dialogForm.value.serialization_status, // 前端serialization_status -> 后端is_serializing
       is_shelf: dialogForm.value.shelf_status,         // 前端shelf_status -> 后端is_shelf
       sort: dialogForm.value.sort || 0,

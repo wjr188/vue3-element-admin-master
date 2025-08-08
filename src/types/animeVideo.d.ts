@@ -1,4 +1,5 @@
 export interface AnimeVideo {
+  coin: number
   id: number
   title: string
   tags?: string[]

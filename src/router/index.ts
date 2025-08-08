@@ -204,9 +204,9 @@ export const constantRoutes: RouteRecordRaw[] = [
     redirect: "/comic/japan-manage",
     meta: { title: "漫画", icon: "notebook-2", alwaysShow: true, permission: "comic" },
     children: [
-      { ...comicChinese, path: 'chinese-manage', meta: { ...comicChinese.meta, title: '国漫管理', permission: "comic:manage" } },
-      { ...comicChineseCategory, path: 'chinese-category', meta: { ...comicChineseCategory.meta, title: '国漫分类', permission: "comic:category" } },
-      { ...comicChineseTag, path: 'chinese-tag', meta: { ...comicChineseTag.meta, title: '国漫标签', permission: "comic:tag" } },
+      { ...comicChinese, path: 'chinese-manage', meta: { ...comicChinese.meta, title: '漫画管理', permission: "comic:manage" } },
+      { ...comicChineseCategory, path: 'chinese-category', meta: { ...comicChineseCategory.meta, title: '漫画分类', permission: "comic:category" } },
+      { ...comicChineseTag, path: 'chinese-tag', meta: { ...comicChineseTag.meta, title: '漫画标签', permission: "comic:tag" } },
       { ...comicRecommendManage, path: 'recommend-manage', meta: { ...comicRecommendManage.meta, title: '漫画推荐', permission: "comic:recommend" } },
     ],
   },

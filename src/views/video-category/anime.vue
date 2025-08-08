@@ -61,18 +61,33 @@
           </el-form>
         </div>
         <el-table
-          :data="pagedChildCategories"
-          row-key="id"
-          border
-          stripe
-          class="boss-table"
-          @selection-change="handleSelectionChange"
-          style="width:100%"
-          v-loading="categoryLoading"
-        >
-          <el-table-column type="selection" width="50" align="center" />
+  :data="pagedCategories"
+  row-key="id"
+  border
+  stripe
+  class="boss-table"
+  @selection-change="handleSelectionChange"
+  style="width:100%"
+  v-loading="categoryLoading"
+>
+          <el-table-column
+  type="selection"
+  width="50"
+  align="center"
+  :selectable="row => !row.isParent"
+/>
+
           <el-table-column prop="id" label="子分类ID" width="90" align="center" />
-          <el-table-column prop="name" label="子分类名称" min-width="150" align="center" />
+          <el-table-column prop="name" label="子分类名称" min-width="150" align="center">
+  <template #default="scope">
+    <span v-if="scope.row.isParent" style="font-weight:bold;color:#409EFF">
+      {{ scope.row.name }}（主分类）
+    </span>
+    <span v-else>
+      {{ scope.row.name }}
+    </span>
+  </template>
+</el-table-column>
           <el-table-column prop="parentName" label="所属主分类" min-width="120" align="center" />
           <el-table-column prop="videoCount" label="视频数" width="90" align="center" />
           <el-table-column prop="tags" label="标签" min-width="180" align="center">
@@ -107,10 +122,38 @@
               <el-tag type="info" v-else>禁用</el-tag>
             </template>
           </el-table-column>
+          <!-- 布局类型 -->
+<el-table-column prop="layout_type" label="布局类型" width="100" align="center">
+  <template #default="scope">
+    <span>{{ scope.row.layout_type || '-' }}</span>
+  </template>
+</el-table-column>
+
+<!-- 图标 -->
+<el-table-column prop="icon" label="图标" width="80" align="center">
+  <template #default="scope">
+    <img
+      v-if="scope.row.icon"
+      :src="`/icons/${scope.row.icon}`"
+      alt="icon"
+      style="width: 24px; height: 24px; display: block; margin: 0 auto;"
+      @error="e => (e.target.style.display = 'none')"
+    />
+    <span v-else>-</span>
+  </template>
+</el-table-column>
           <el-table-column label="操作" width="140" align="center" fixed="right">
             <template #default="scope">
-              <el-button size="small" type="warning" @click="onEdit(scope.row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="onDelete(scope.row)">删除</el-button>
+              <el-button
+  size="small"
+  type="warning"
+  @click="scope.row.isParent ? onEditParent(scope.row) : onEdit(scope.row)"
+>编辑</el-button>
+<el-button
+  size="small"
+  type="danger"
+  @click="scope.row.isParent ? onDeleteParent(scope.row) : onDelete(scope.row)"
+>删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -153,6 +196,31 @@
         <el-form-item label="子分类名称" prop="name" required>
           <el-input v-model="editData.name" placeholder="请输入子分类名称" />
         </el-form-item>
+        <el-form-item label="布局类型" prop="layout_type">
+      <el-select v-model="editData.layout_type" placeholder="请选择布局类型" style="width: 100%">
+        <el-option label="横滑卡片" value="type1" />
+        <el-option label="三宫格" value="type2" />
+        <el-option label="两宫格" value="type3" />
+        <el-option label="九宫格" value="type4" />
+        <el-option label="列表" value="list" />
+        <el-option label="不限制" value="type5" />
+        <el-option label="横图视频卡" value="videocard" />
+      </el-select>
+    </el-form-item>
+
+    <el-form-item label="图标文件" prop="icon">
+      <el-input v-model="editData.icon" placeholder="请输入图标文件名，如 hot1.svg" style="width: 180px;">
+        <template #append>
+          <img
+            v-if="editData.icon"
+            :src="`/icons/${editData.icon}`"
+            alt="icon预览"
+            style="width: 24px; height: 24px; margin-left: 8px;"
+            @error="e => (e.target.style.display = 'none')"
+          />
+        </template>
+      </el-input>
+    </el-form-item>
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="editData.sort" :min="1" controls-position="right" style="width:100%;" />
         </el-form-item>
@@ -205,6 +273,29 @@ const {
   batchRemoveCategories,
   batchUpdateCategorySort,
 } = animeCategoriesStore
+// 当前选中的主分类
+const selectedParent = computed<Category | null>(() =>
+  parentCategories.value.find(p => p.id === currentTreeId.value) || null
+);
+
+// 拼接主分类 + 子分类分页数据
+const pagedCategories = computed(() => {
+  const children = pagedChildCategories.value
+  if (selectedParent.value && currentPage.value === 1) {
+    // 只在第一页拼接主分类行，防止分页错乱
+    return [
+      {
+        ...selectedParent.value,
+        parentName: '--',
+        sort: selectedParent.value.sort || 0,
+        status: Boolean(selectedParent.value.status),
+        isParent: true, // 用于标记主分类
+      },
+      ...children,
+    ]
+  }
+  return children
+})
 
 
 interface Category {
@@ -212,7 +303,7 @@ interface Category {
   name: string;
   parent_id: number;
   sort: number;
-  status: number | boolean;
+  status: number;
   tags?: string[];
   videoCount?: number;
   create_time?: string;
@@ -304,7 +395,6 @@ const filteredChildCategories = computed<(Category & { parentName: string })[]>(
     ...row,
     parentName: parentCategories.value.find((p: Category) => p.id === row.parent_id)?.name ?? '--',
     sort: row.sort || 0,
-    status: Boolean(row.status)
   })).sort((a,b) => (a.sort || 0) - (b.sort || 0));
 });
 
@@ -393,7 +483,9 @@ const editData = ref<{ id: number | null; name: string; parent_id: number | ''; 
   parent_id: '',
   sort: 1,
   status: true,
-  tags: []
+  tags: [],
+  layout_type: 'type2',
+  icon: '',
 })
 const childFormRef = ref<FormInstance>();
 
@@ -409,9 +501,24 @@ function openDialog() {
   dialogVisible.value = true
 }
 function onEdit(row: Category) {
-  editData.value = { ...row, status: Boolean(row.status) } as { id: number | null; name: string; parent_id: number | ''; sort: number; status: boolean; tags: string[] };
+  editData.value = {
+    ...row,
+    status: Boolean(row.status),
+    layout_type: row.layout_type || 'type2',  // 给默认值，比如 'type2'
+    icon: row.icon || '',
+  } as {
+    id: number | null;
+    name: string;
+    parent_id: number | '';
+    sort: number;
+    status: boolean;
+    tags: string[];
+    layout_type?: string;
+    icon?: string;
+  }
   dialogVisible.value = true
 }
+
 function onDialogClose() {
     if (childFormRef.value) {
         childFormRef.value.resetFields();
@@ -469,6 +576,20 @@ function onSearch() {
 function onReset() {
   filter.value = { child: '', tag: '' }
   currentPage.value = 1
+}
+function onEditParent(row: Category) {
+  editParentData.value = { id: row.id, name: row.name }
+  parentDialogVisible.value = true
+}
+
+function onDeleteParent(row: Category) {
+  ElMessageBox.confirm('确定删除主分类及其所有子分类吗？', '提示', { type: 'warning' })
+    .then(async () => {
+      await removeCategory(row.id)
+      await fetchCategories()
+      ElMessage.success('主分类已删除')
+    })
+    .catch(() => {})
 }
 
 const tagDialogVisible = ref(false)

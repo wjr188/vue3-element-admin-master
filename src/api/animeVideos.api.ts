@@ -46,16 +46,20 @@ export function getAnimeVideoDetail(id: number) {
   return simpleService.get<{ code: number; data: AnimeVideo }>('/api/anime/videos/' + id)
 }
 
-// 批量设置播放数
-export function batchSetAnimePlay(ids: number[], playCount: number) {
-  return simpleService.post('/api/anime/videos/batch-set-play', { ids, play_count: playCount })
+/// 批量设置播放数
+export function batchSetAnimePlay(ids: number[], views: number) {
+  return simpleService.post('/api/anime/videos/batch-set-play', { ids, views })
 }
 
 // 批量设置收藏数
-export function batchSetAnimeCollect(ids: number[], collectCount: number) {
-  return simpleService.post('/api/anime/videos/batch-set-collect', { ids, collect_count: collectCount })
+export function batchSetAnimeCollect(ids: number[], collects: number) {
+  return simpleService.post('/api/anime/videos/batch-set-collect', { ids, collects })
 }
 
+// 批量设置点赞数
+export function batchSetAnimeLikes(ids: number[], likes: number) {
+  return simpleService.post('/api/anime/videos/batch-set-likes', { ids, likes })
+}
 // 批量升序置顶
 export function batchSortAnimeAsc(ids: number[]) {
   return simpleService.post('/api/anime/videos/batch-sort-asc', { ids })

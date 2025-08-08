@@ -30,6 +30,18 @@
             {{ store.groupAnimeCounts[row.id] || 0 }}
           </template>
         </el-table-column>
+        <el-table-column prop="layout_type" label="布局类型" width="100">
+  <template #default="scope">
+    <span>
+      {{ layoutTypeText(scope.row.layout_type) }}
+    </span>
+  </template>
+</el-table-column>
+<el-table-column prop="icon" label="图标" width="60">
+  <template #default="scope">
+    <img v-if="scope.row.icon" :src="`/icons/${scope.row.icon}`" style="width:24px;height:24px;" />
+  </template>
+</el-table-column>
         <el-table-column label="操作" width="250">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditGroupDialog(row)">编辑分组名</el-button>
@@ -56,6 +68,31 @@
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="groupForm.sort" :min="1" controls-position="right"></el-input-number>
         </el-form-item>
+        <el-form-item label="布局类型" prop="layout_type">
+  <el-select v-model="groupForm.layout_type" placeholder="请选择布局类型" style="width: 100%">
+    <el-option label="横滑卡片" value="type1" />
+    <el-option label="三宫格" value="type2" />
+    <el-option label="两宫格" value="type3" />
+    <el-option label="九宫格" value="type4" />
+    <el-option label="列表" value="list" />
+    <el-option label="不限制" value="type5" />
+    <el-option label="横图视频卡" value="videocard" />
+  </el-select>
+</el-form-item>
+<el-form-item label="图标文件" prop="icon">
+  <el-input v-model="groupForm.icon" placeholder="如 hot1.svg，留空不显示" style="width: 180px;">
+    <template #append>
+      <img
+  v-if="groupForm.icon"
+  :src="`/icons/${groupForm.icon}`"
+  style="width: 24px; height: 24px; margin-left: 4px;"
+  alt="icon预览"
+  @error="onIconImgError"
+/>
+
+    </template>
+  </el-input>
+</el-form-item>
         </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -99,8 +136,8 @@
                 </el-select>
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" @click="searchAnimes">搜索</el-button>
-                <el-button @click="resetAnimeFilters">重置</el-button>
+                <el-button type="primary" @click="() => searchAnimes()">搜索</el-button>
+<el-button @click="() => resetAnimeFilters()">重置</el-button>
               </el-form-item>
             </el-form>
           </div>
@@ -178,11 +215,19 @@ const store = useAnimeRecommendStore();
 const groupFilterForm = ref({ keyword: '' });
 const groupFormDialogVisible = ref(false);
 const isEditGroup = ref(false);
-const groupForm = ref({ id: null as number | null, name: '', sort: 1 });
+const groupForm = ref({
+  id: null as number | null,
+  name: '',
+  sort: 1,
+  layout_type: 'type1', // 新增
+  icon: '',             // 新增
+});
 const groupFormRef = ref<InstanceType<typeof ElForm>>();
 const groupRules = {
   name: [{ required: true, message: '请输入分组名称', trigger: 'blur' }],
   sort: [{ required: true, message: '请输入排序值', trigger: 'blur' }],
+  layout_type: [{ required: true, message: '请选择布局类型', trigger: 'change' }],
+  icon: [{ required: false, message: '请输入图标文件名', trigger: 'blur' }],
 };
 const groupSortChanged = ref(false);
 
@@ -211,12 +256,12 @@ onMounted(async () => {
 
 // 推荐分组相关操作
 function searchGroups() {
-  store.setGroupFilter({ keyword: groupFilterForm.value.keyword });
+  store.groupFilter.keyword = groupFilterForm.value.keyword
   store.fetchRecommendGroups();
 }
 function resetGroupFilters() {
   groupFilterForm.value.keyword = '';
-  store.setGroupFilter({ keyword: '' });
+  store.groupFilter.keyword = '';
   store.fetchRecommendGroups();
 }
 function openAddGroupDialog() {
@@ -224,7 +269,13 @@ function openAddGroupDialog() {
   const maxSort = store.recommendGroups && store.recommendGroups.length > 0
     ? Math.max(...store.recommendGroups.map(g => g.sort || 0))
     : 0;
-  groupForm.value = { id: null, name: '', sort: maxSort + 1 };
+  groupForm.value = {
+    id: null,
+    name: '',
+    sort: maxSort + 1,
+    layout_type: 'type1', // 新增
+    icon: '',             // 新增
+  };
   groupFormDialogVisible.value = true;
   nextTick(() => {
     groupFormRef.value?.clearValidate();
@@ -232,7 +283,13 @@ function openAddGroupDialog() {
 }
 function openEditGroupDialog(row: any) {
   isEditGroup.value = true;
-  groupForm.value = { id: row.id, name: row.name, sort: row.sort };
+  groupForm.value = {
+    id: row.id,
+    name: row.name,
+    sort: row.sort,
+    layout_type: row.layout_type || 'type1', // 新增
+    icon: row.icon || '',                    // 新增
+  };
   groupFormDialogVisible.value = true;
   nextTick(() => {
     groupFormRef.value?.clearValidate();
@@ -245,23 +302,28 @@ async function submitGroupForm() {
     if (isEditGroup.value) {
       response = await store.updateRecommendGroup(
         groupForm.value.id!,
-        groupForm.value.name,
-        groupForm.value.sort
+        {
+          name: groupForm.value.name,
+          sort: groupForm.value.sort,
+          layout_type: groupForm.value.layout_type,
+          icon: groupForm.value.icon,
+        }
       );
     } else {
-      // 新建分组
       response = await store.addRecommendGroup({
         name: groupForm.value.name,
-        sort: groupForm.value.sort
+        sort: groupForm.value.sort,
+        layout_type: groupForm.value.layout_type,
+        icon: groupForm.value.icon,
       });
     }
-    if (response && response.code === 200) {
-      ElMessage.success(response.msg || (isEditGroup.value ? '分组更新成功！' : '分组添加成功！'));
-      groupFormDialogVisible.value = false;
-      await store.fetchRecommendGroups();
-    } else {
-      ElMessage.error(response?.msg || '操作失败，请重试！');
-    }
+    if (response) {
+  ElMessage.success(isEditGroup.value ? '分组更新成功！' : '分组添加成功！');
+  groupFormDialogVisible.value = false;
+  await store.fetchRecommendGroups();
+} else {
+  ElMessage.error('操作失败，请重试！');
+}
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败，请重试！');
@@ -277,12 +339,12 @@ async function deleteGroup(groupId: number) {
       type: 'warning',
     });
     const response = await store.deleteRecommendGroup(groupId);
-    if (response && response.code === 200) {
-      ElMessage.success(response.msg || '分组删除成功！');
-      await store.fetchRecommendGroups();
-    } else {
-      ElMessage.error(response?.msg || '删除失败，请重试！');
-    }
+if (response) {
+  ElMessage.success('分组删除成功！');
+  await store.fetchRecommendGroups();
+} else {
+  ElMessage.error('删除失败，请重试！');
+}
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败，请重试！');
@@ -408,6 +470,23 @@ function closeAnimeManageDialog() {
     selectedAnimeSortableInstance = null;
   }
 }
+function layoutTypeText(type: string) {
+  const map: Record<string, string> = {
+    type1: '横滑卡片',
+    type2: '三宫格',
+    type3: '两宫格',
+    type4: '九宫格',
+    list: '列表',
+    type5: '不限制',
+    videocard: '横图视频卡'
+  }
+  return map[type] || type || '-';
+}
+function onIconImgError(e: Event) {
+  const target = e.target as HTMLImageElement | null;
+  if (target) target.style.display = 'none';
+}
+
 async function searchAnimes(resetPage = false) {
   if (resetPage) animePagination.value.currentPage = 1;
   animeLoading.value = true;

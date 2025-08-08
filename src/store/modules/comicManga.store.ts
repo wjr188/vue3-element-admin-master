@@ -145,6 +145,19 @@ return res
       return { code: 1, msg: '批量设置金币请求失败' }
     }
   }
+// ✅ 新增：批量设置更新星期
+  async function batchSetUpdateDay(ids: number[], updateDay: number) {
+    try {
+      const res = await service.post('/api/comic/manga/batchSetUpdateDay', { 
+        ids, 
+        update_day: updateDay 
+      })
+      return res
+    } catch (error) {
+      ElMessage.error('批量设置更新星期请求失败')
+      return { code: 1, msg: '批量设置更新星期请求失败' }
+    }
+  }
 
   // 获取章节列表
   async function fetchChapters(mangaId: number, params: any = {}) {
@@ -324,5 +337,6 @@ return res
     setAllChaptersVipByMangaId,
     setAllChaptersCoinByMangaId,
     batchSetChapterFree,
+    batchSetUpdateDay,
   }
 })
